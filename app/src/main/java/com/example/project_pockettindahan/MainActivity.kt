@@ -52,3 +52,12 @@ fun Greeting1(name: String, modifier: Modifier = Modifier) {
     )
 }
 
+@Composable
+fun Greeting2(name: String, modifier: Modifier = Modifier) {
+    Text(
+        text = "Hello $name!",
+        modifier = modifier
+        // TEST FOR REPO......................................................................
+    )
+}
+
