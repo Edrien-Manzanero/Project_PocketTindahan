@@ -76,6 +76,9 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 }
+
+
+
 //@Composable
 //fun AddItemScreen(db: AppDatabase) {
 //    // State variables for the Items entity fields
