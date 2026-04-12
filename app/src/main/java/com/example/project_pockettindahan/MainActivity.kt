@@ -3,6 +3,7 @@ package com.example.project_pockettindahan
 import AppDatabase
 import Items
 import ItemsDao
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -71,52 +72,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            Project_PocketTindahanTheme {
-                Message()
-                }
-            }
-        }
-    }
-@Preview
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun Message() {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White,
-                        modifier = Modifier.size(45.dp)
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img),
-                            contentDescription = "Logo",
-                            modifier = Modifier
-                                .size(90.dp)
-                                .padding(5.dp)
-                        )
-                    }
-                },
-                modifier = Modifier.shadow(elevation = 8.dp),
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = colorResource(id = R.color.darkBlue)
-                )
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ){
-
-        }
+        val intent = Intent(this, DashboardActivity::class.java)
+        startActivity(intent)
     }
 }
 //@Composable
