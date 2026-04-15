@@ -140,9 +140,19 @@ fun InventorySearchBar(db: AppDatabase) {
 
     val itemList by db.ItemsDao().getAll().collectAsState(initial = emptyList())
 
+    // --- NEW FILTERING LOGIC ---
+    // This dynamically filters the list based on your search query and selected category
+    val filteredItems = itemList.filter { item ->
+        val matchesSearch = item.itemName?.contains(searchQuery, ignoreCase = true) ?: false
+        val matchesCategory = if (selectedCategory == "All") true else item.itemCategory == selectedCategory
+
+        // Include the item if the search box is empty OR it matches the text, AND it matches the category
+        (searchQuery.isBlank() || matchesSearch) && matchesCategory
+    }
+
     // State for Dialogs
     var showAddDialog by remember { mutableStateOf(false) }
-    var itemToEdit by remember { mutableStateOf<Items?>(null) } // Keeps track of what item is being edited
+    var itemToEdit by remember { mutableStateOf<Items?>(null) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -270,17 +280,16 @@ fun InventorySearchBar(db: AppDatabase) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Display Database Items
+        // Display Database Items - NOW USING filteredItems instead of itemList
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(itemList) { item ->
+            items(filteredItems) { item ->
                 ItemCard(
                     item = item,
-                    onEditClick = { itemToEdit = item }, // Opens Edit Dialog
+                    onEditClick = { itemToEdit = item },
                     onDeleteClick = {
-                        // Deletes from Database
                         scope.launch(Dispatchers.IO) {
                             db.ItemsDao().delete(item)
                             withContext(Dispatchers.Main) {
@@ -295,7 +304,6 @@ fun InventorySearchBar(db: AppDatabase) {
 
     // --- DIALOG TRIGGERS ---
 
-    // Add Item Dialog
     if (showAddDialog) {
         AddItemDialog(
             onDismiss = { showAddDialog = false },
@@ -311,14 +319,13 @@ fun InventorySearchBar(db: AppDatabase) {
         )
     }
 
-    // Edit Item Dialog
     itemToEdit?.let { editingItem ->
         EditItemDialog(
             item = editingItem,
             onDismiss = { itemToEdit = null },
             onSave = { updatedItem ->
                 scope.launch(Dispatchers.IO) {
-                    db.ItemsDao().update(updatedItem) // Needs @Update in ItemsDao
+                    db.ItemsDao().update(updatedItem)
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Item Updated", Toast.LENGTH_SHORT).show()
                         itemToEdit = null

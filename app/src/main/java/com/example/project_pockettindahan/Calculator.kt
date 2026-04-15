@@ -1,12 +1,13 @@
 package com.example.project_pockettindahan
 
-
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +24,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -45,6 +45,7 @@ val buttonList = listOf(
     "1","2","3","-",
     "AC","0",".","="
 )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalculatorScreen(modifier: Modifier = Modifier, viewModel: CalculatorViewModel) {
@@ -79,17 +80,29 @@ fun CalculatorScreen(modifier: Modifier = Modifier, viewModel: CalculatorViewMod
         )
     }
 }
+
 @Composable
 fun Calculator(modifier: Modifier = Modifier, viewModel : CalculatorViewModel) {
 
     val equationText = viewModel.equationText.observeAsState()
     val resultText = viewModel.resultText.observeAsState()
 
-    Box(modifier = modifier) {
+    // 1. The passed modifier (with Scaffold padding) is applied ONLY here
+    Column(
+        modifier = modifier
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+
+        // 2. Wrap the text in a weighted column.
+        // This pushes the text to the bottom of the available space,
+        // and safely pushes the Grid to the bottom without forcing it off-screen.
         Column(
-            modifier = modifier.fillMaxSize()
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            horizontalAlignment = Alignment.End
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.Bottom
         ) {
             Text(
                 text = equationText.value
@@ -103,7 +116,6 @@ fun Calculator(modifier: Modifier = Modifier, viewModel : CalculatorViewModel) {
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = resultText.value?:"",
                 style = TextStyle(
@@ -113,20 +125,21 @@ fun Calculator(modifier: Modifier = Modifier, viewModel : CalculatorViewModel) {
                 maxLines = 2,
             )
             Spacer(modifier = Modifier.height(10.dp))
+        }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4)
-            ) {
-                items(buttonList) { btn ->
-                    CalculatorButton(btn = btn, onClick = {
-                        val operator = when (btn) {
-                            "\u00F7" -> "/"
-                            "x" -> "*"
-                            else -> btn
-                        }
-                        viewModel.onButtonClick(operator)
-                    })
-                }
+        // The Grid sits safely below the text
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4)
+        ) {
+            items(buttonList) { btn ->
+                CalculatorButton(btn = btn, onClick = {
+                    val operator = when (btn) {
+                        "\u00F7" -> "/"
+                        "x" -> "*"
+                        else -> btn
+                    }
+                    viewModel.onButtonClick(operator)
+                })
             }
         }
     }
@@ -134,7 +147,8 @@ fun Calculator(modifier: Modifier = Modifier, viewModel : CalculatorViewModel) {
 
 @Composable
 fun CalculatorButton(btn: String, onClick : ()-> Unit){
-    Box(modifier = Modifier.padding(8.dp)){
+    // 3. Reduced padding from 8.dp to 5.dp to save vertical space and prevent cropping
+    Box(modifier = Modifier.padding(5.dp)){
         FloatingActionButton(onClick = onClick,
             modifier = Modifier.aspectRatio(1f),
             shape = CircleShape,
@@ -145,7 +159,7 @@ fun CalculatorButton(btn: String, onClick : ()-> Unit){
                 pressedElevation = 0.dp,
                 focusedElevation = 0.dp,
                 hoveredElevation = 0.dp
-        )
+            )
         ){
             Text(text = btn, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         }

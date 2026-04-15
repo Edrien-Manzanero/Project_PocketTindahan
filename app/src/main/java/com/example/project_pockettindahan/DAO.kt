@@ -33,7 +33,6 @@ interface SalesDao {
     @Query("SELECT * FROM Sales")
     fun getAll(): Flow<List<Sales>>
 
-    // FIX HERE: Change List<Items> to List<Sales>
     @Query("SELECT * FROM Sales WHERE sales_id IN (:userIds)")
     fun loadAllByIds(userIds: IntArray): List<Sales>
 
@@ -46,6 +45,11 @@ interface SalesDao {
 
     @Delete
     fun delete(user: Sales)
+
+    // --- ADD THIS NEW LINE ---
+    // Returns the ID of the new sale so we can link the items to it!
+    @Insert
+    fun insertSale(sale: Sales): Long
 }
 
 @Dao
@@ -66,4 +70,17 @@ interface DebtDao {
 
     @Delete
     fun delete(user: Debt)
+
+    @Update
+    fun update(user: Debt)
+}
+
+@Dao
+interface SalesItemDao {
+    // This grabs all the individual items that belong to one specific receipt
+    @Query("SELECT * FROM SalesItem WHERE parent_sale_id = :saleId")
+    fun getItemsForSale(saleId: Int): List<SalesItem>
+
+    @Insert
+    fun insertAll(vararg items: SalesItem)
 }
