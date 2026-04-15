@@ -59,6 +59,10 @@ data class CartItem(val product: Items, val quantity: Int)
 
 class ProductsActivity : ComponentActivity() {
 
+    // 1. Setup Theme Variables
+    private val isDarkModeState = mutableStateOf(false)
+    private lateinit var prefs: PreferencesManager
+
     private val db by lazy {
         Room.databaseBuilder(
             applicationContext,
@@ -68,8 +72,38 @@ class ProductsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 2. Initialize Preferences
+        prefs = PreferencesManager(this)
+        isDarkModeState.value = prefs.isDarkMode()
+
         setContent {
-            ProductsScreen(db)
+            // 3. Define Palettes
+            val lightColors = lightColorScheme(
+                surface = Color.White,
+                onSurface = colorResource(id = R.color.darkBlue),
+                background = Color(0xFFF5F5F5)
+            )
+            val darkColors = darkColorScheme(
+                surface = Color(0xFF1E1E1E),
+                onSurface = Color.White,
+                background = Color(0xFF121212)
+            )
+
+            // 4. Wrap Screen in MaterialTheme
+            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    ProductsScreen(db)
+                }
+            }
+        }
+    }
+
+    // 5. Instantly Refresh Theme
+    override fun onResume() {
+        super.onResume()
+        if (::prefs.isInitialized) {
+            isDarkModeState.value = prefs.isDarkMode()
         }
     }
 }
@@ -84,11 +118,11 @@ fun ProductsScreen(db: AppDatabase) {
     val totalCartQuantity = cartItems.sumOf { it.quantity }
     val totalCartPrice = cartItems.sumOf { it.quantity * (it.product.itemRetailPrice ?: 0) }
 
-    // Added scope and context for database operations
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     Scaffold(
+        containerColor = Color.Transparent, // Adapts to theme surface
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -106,7 +140,6 @@ fun ProductsScreen(db: AppDatabase) {
                 )
             )
         },
-        // --- ONLY SHOW BOTTOM BAR ON THE MAIN GRID ---
         bottomBar = {
             if (selectedCategory == null) {
                 Surface(
@@ -141,7 +174,7 @@ fun ProductsScreen(db: AppDatabase) {
                             modifier = Modifier.height(48.dp)
                         ) {
                             Icon(
-                                painter = painterResource(android.R.drawable.ic_menu_agenda),
+                                painter = painterResource(android.R.drawable.ic_menu_agenda), // Replace if missing
                                 contentDescription = "Cart",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
@@ -158,7 +191,7 @@ fun ProductsScreen(db: AppDatabase) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFFF5F5F5))
+                .background(MaterialTheme.colorScheme.background) // DYNAMIC
                 .padding(15.dp)
                 .border(4.dp, colorResource(id = R.color.darkBlue), RoundedCornerShape(16.dp)),
             verticalArrangement = Arrangement.Top,
@@ -197,13 +230,11 @@ fun ProductsScreen(db: AppDatabase) {
             onDismiss = { showCartDialog = false },
             onCheckout = {
                 scope.launch(Dispatchers.IO) {
-                    // 1. Calculate Totals
                     val totalSales = cartItems.sumOf { (it.product.itemRetailPrice ?: 0) * it.quantity }
                     val totalOriginalCost = cartItems.sumOf { (it.product.itemOriginalPrice ?: 0) * it.quantity }
                     val totalProfit = totalSales - totalOriginalCost
                     val totalItemsSold = cartItems.sumOf { it.quantity }
 
-                    // 2. Format Date/Time for Philippines
                     val sdfDate = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).apply {
                         timeZone = java.util.TimeZone.getTimeZone("Asia/Manila")
                     }
@@ -213,7 +244,6 @@ fun ProductsScreen(db: AppDatabase) {
                     val currentDate = sdfDate.format(Date())
                     val currentTime = sdfTime.format(Date())
 
-                    // 3. SAVE SUMMARY & GET THE NEW ID
                     val newSale = Sales(
                         salesDate = currentDate,
                         salesTime = currentTime,
@@ -223,13 +253,11 @@ fun ProductsScreen(db: AppDatabase) {
                         salesProfit = totalProfit
                     )
 
-                    // This returns the ID of the sale we just created
                     val newlyCreatedSaleId = db.SalesDao().insertSale(newSale).toInt()
 
-                    // 4. SAVE INDIVIDUAL ITEMS (The fix for "Loading items...")
                     val salesItemsList = cartItems.map { cartItem ->
                         SalesItem(
-                            parentSaleId = newlyCreatedSaleId, // Links this item to the receipt!
+                            parentSaleId = newlyCreatedSaleId,
                             itemName = cartItem.product.itemName ?: "Unknown",
                             quantity = cartItem.quantity,
                             pricePerUnit = cartItem.product.itemRetailPrice ?: 0
@@ -237,7 +265,6 @@ fun ProductsScreen(db: AppDatabase) {
                     }
                     db.SalesItemDao().insertAll(*salesItemsList.toTypedArray())
 
-                    // 5. Deduct the stock (Existing logic)
                     cartItems.forEach { cartItem ->
                         val currentStock = cartItem.product.itemCurrentStock ?: 0
                         val updatedProduct = cartItem.product.copy(
@@ -246,7 +273,6 @@ fun ProductsScreen(db: AppDatabase) {
                         db.ItemsDao().update(updatedProduct)
                     }
 
-                    // 6. Clear and Close
                     withContext(Dispatchers.Main) {
                         cartItems = emptyList()
                         showCartDialog = false
@@ -318,7 +344,8 @@ fun CategoryButton(title: String, iconRes: Int, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Color.White, RoundedCornerShape(8.dp)).padding(8.dp),
+            // DYNAMIC: Surface instead of White
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)).padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -328,7 +355,8 @@ fun CategoryButton(title: String, iconRes: Int, onClick: () -> Unit) {
                     modifier = Modifier.size(70.dp).padding(bottom = 8.dp),
                     contentScale = ContentScale.Fit
                 )
-                Text(text = title, color = Color(0xFF0D47A1), fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, fontSize = 18.sp)
+                // DYNAMIC: Text adapts to mode
+                Text(text = title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, fontSize = 18.sp)
             }
         }
     }
@@ -352,7 +380,7 @@ fun ProductListScreen(
             text = category,
             fontSize = 24.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = colorResource(id = R.color.darkBlue),
+            color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             textAlign = TextAlign.Center
         )
@@ -398,11 +426,12 @@ fun ProductListScreen(
                         Toast.makeText(context, "No items selected", Toast.LENGTH_SHORT).show()
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                // DYNAMIC: Surface background, Text onSurface color
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, colorResource(id = R.color.darkBlue)),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "Add", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.Bold)
+                Text(text = "Add", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -414,18 +443,18 @@ fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // DYNAMIC
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = item.itemName ?: "Unknown Item", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                    Text(text = item.itemName ?: "Unknown Item", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp) // DYNAMIC
                     Text(text = item.itemCategory ?: "Uncategorized", color = Color.Gray, fontSize = 14.sp)
                 }
 
                 Text(
                     text = "₱${item.itemRetailPrice ?: 0}.00",
-                    color = colorResource(id = R.color.darkBlue),
+                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 16.sp
                 )
@@ -444,15 +473,15 @@ fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
                     modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "-", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colorResource(id = R.color.darkBlue),
+                        text = "-", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                         modifier = Modifier.clickable { if (quantity > 0) onQuantityChange(quantity - 1) }.padding(horizontal = 8.dp)
                     )
                     Text(
-                        text = quantity.toString(), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = colorResource(id = R.color.darkBlue),
+                        text = quantity.toString(), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
                     Text(
-                        text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colorResource(id = R.color.darkBlue),
+                        text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                         modifier = Modifier.clickable { if (quantity < (item.itemCurrentStock ?: 0)) onQuantityChange(quantity + 1) }.padding(horizontal = 8.dp)
                     )
                 }
@@ -467,13 +496,12 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
         Card(
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(4.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background), // DYNAMIC
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(text = "Your Cart", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = colorResource(id = R.color.darkBlue), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), textAlign = TextAlign.Center)
+                Text(text = "Your Cart", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), textAlign = TextAlign.Center) // DYNAMIC
 
-                // The Scrollable list of items
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (cartItems.isEmpty()) {
                         item { Text(text = "Your cart is currently empty.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center) }
@@ -481,7 +509,7 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
                         items(cartItems) { cartItem ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
                                 elevation = CardDefaults.cardElevation(2.dp)
                             ) {
                                 Row(
@@ -490,13 +518,13 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = cartItem.product.itemName ?: "Unknown", fontWeight = FontWeight.Bold, color = colorResource(id = R.color.darkBlue))
+                                        Text(text = cartItem.product.itemName ?: "Unknown", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) // DYNAMIC
                                         Text(text = "Qty: ${cartItem.quantity}", color = Color.Gray, fontSize = 14.sp)
                                     }
                                     Text(
                                         text = "₱${(cartItem.product.itemRetailPrice ?: 0) * cartItem.quantity}.00",
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = colorResource(id = R.color.darkBlue)
+                                        color = MaterialTheme.colorScheme.onSurface // DYNAMIC
                                     )
                                 }
                             }
@@ -506,19 +534,17 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // FIXED Total at the bottom (Outside LazyColumn)
                 val total = cartItems.sumOf { (it.product.itemRetailPrice ?: 0) * it.quantity }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total:", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colorResource(id = R.color.darkBlue))
+                    Text("Total:", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) // DYNAMIC
                     Text("₱${total}.00", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4CAF50))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Bottom Buttons
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)), shape = RoundedCornerShape(8.dp)) {
                         Text(text = "Back", color = Color.White, fontWeight = FontWeight.Bold)

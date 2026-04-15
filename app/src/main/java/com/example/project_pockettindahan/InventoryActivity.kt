@@ -41,12 +41,15 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -61,9 +64,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -74,6 +77,9 @@ import kotlinx.coroutines.withContext
 
 class InventoryActivity: ComponentActivity(){
 
+    private val isDarkModeState = mutableStateOf(false)
+    private lateinit var prefs: PreferencesManager
+
     private val db by lazy {
         Room.databaseBuilder(
             applicationContext,
@@ -83,8 +89,35 @@ class InventoryActivity: ComponentActivity(){
 
     override fun onCreate(savedInstanceState: Bundle?){
         super.onCreate(savedInstanceState)
+
+        prefs = PreferencesManager(this)
+        isDarkModeState.value = prefs.isDarkMode()
+
         setContent {
-            Message(db)
+            val lightColors = lightColorScheme(
+                surface = Color.White,
+                onSurface = colorResource(id = R.color.darkBlue),
+                background = Color(0xFFF5F5F5)
+            )
+            val darkColors = darkColorScheme(
+                surface = Color(0xFF1E1E1E),
+                onSurface = Color.White,
+                background = Color(0xFF121212)
+            )
+
+            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                // FIXED: Placed Message(db) inside the Surface instead of a nested setContent
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Message(db)
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::prefs.isInitialized) {
+            isDarkModeState.value = prefs.isDarkMode()
         }
     }
 }
@@ -93,21 +126,22 @@ class InventoryActivity: ComponentActivity(){
 @Composable
 fun Message(db: AppDatabase) {
     Scaffold(
+        containerColor = Color.Transparent, // Let the Surface handle the background color
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Surface(
                         shape = CircleShape,
-                        color = Color.White,
+                        color = Color.White, // FIXED: Changed to transparent to fit logo
                         modifier = Modifier.size(45.dp)
                     ) {
-                        /*Image(
-                            painter = painterResource(id = R.drawable.img),
+                        Image(
+                            painter = painterResource(id = R.drawable.img), // Make sure this matches your logo
                             contentDescription = "Logo",
                             modifier = Modifier
-                                .size(90.dp)
+                                .fillMaxSize()
                                 .padding(5.dp)
-                        )*/
+                        )
                     }
                 },
                 modifier = Modifier.shadow(elevation = 8.dp),
@@ -121,7 +155,7 @@ fun Message(db: AppDatabase) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFFF5F5F5)),
+                .background(MaterialTheme.colorScheme.background),
             horizontalAlignment = Alignment.CenterHorizontally
         ){
             Spacer(modifier = Modifier.height(24.dp))
@@ -140,17 +174,12 @@ fun InventorySearchBar(db: AppDatabase) {
 
     val itemList by db.ItemsDao().getAll().collectAsState(initial = emptyList())
 
-    // --- NEW FILTERING LOGIC ---
-    // This dynamically filters the list based on your search query and selected category
     val filteredItems = itemList.filter { item ->
         val matchesSearch = item.itemName?.contains(searchQuery, ignoreCase = true) ?: false
         val matchesCategory = if (selectedCategory == "All") true else item.itemCategory == selectedCategory
-
-        // Include the item if the search box is empty OR it matches the text, AND it matches the category
         (searchQuery.isBlank() || matchesSearch) && matchesCategory
     }
 
-    // State for Dialogs
     var showAddDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<Items?>(null) }
 
@@ -165,7 +194,7 @@ fun InventorySearchBar(db: AppDatabase) {
             text = "Inventory",
             fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = colorResource(id = R.color.darkBlue),
+            color = MaterialTheme.colorScheme.onSurface, // DYNAMIC TEXT
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
@@ -175,7 +204,7 @@ fun InventorySearchBar(db: AppDatabase) {
                 .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // DYNAMIC CARD BACKGROUND
         ) {
             Row(
                 modifier = Modifier
@@ -188,19 +217,10 @@ fun InventorySearchBar(db: AppDatabase) {
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = {
-                        Text(
-                            text = "search products",
-                            color = Color.LightGray,
-                            fontSize = 14.sp
-                        )
+                        Text(text = "search products", color = Color.Gray, fontSize = 14.sp)
                     },
                     leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search Icon",
-                            tint = Color.Gray,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(imageVector = Icons.Default.Search, contentDescription = "Search Icon", tint = Color.Gray, modifier = Modifier.size(20.dp))
                     },
                     modifier = Modifier
                         .weight(1f)
@@ -208,10 +228,12 @@ fun InventorySearchBar(db: AppDatabase) {
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color.LightGray,
+                        unfocusedBorderColor = Color.Gray,
                         focusedBorderColor = colorResource(id = R.color.darkBlue),
-                        unfocusedContainerColor = Color.White,
-                        focusedContainerColor = Color.White
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface, // DYNAMIC
+                        focusedContainerColor = MaterialTheme.colorScheme.surface, // DYNAMIC
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface // DYNAMIC
                     )
                 )
 
@@ -221,34 +243,27 @@ fun InventorySearchBar(db: AppDatabase) {
                     Box(
                         modifier = Modifier
                             .height(50.dp)
-                            .background(Color(0xFF9E9E9E), shape = RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+                            .background(Color.Gray, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, Color.DarkGray, RoundedCornerShape(8.dp))
                             .clickable { expanded = true }
                             .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Category: $selectedCategory",
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
+                            Text(text = "Category", color = Color.White, fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Dropdown",
-                                tint = Color.White
-                            )
+                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.White)
                         }
                     }
 
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                     ) {
                         categories.forEach { category ->
                             DropdownMenuItem(
-                                text = { Text(text = category) },
+                                text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
                                     selectedCategory = category
                                     expanded = false
@@ -263,24 +278,16 @@ fun InventorySearchBar(db: AppDatabase) {
                 Button(
                     onClick = { showAddDialog = true },
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colorResource(id = R.color.darkBlue)
-                    ),
+                    colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
                     modifier = Modifier.height(50.dp)
                 ) {
-                    Text(
-                        text = "+ Add",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                    Text(text = "+ Add", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Display Database Items - NOW USING filteredItems instead of itemList
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 16.dp)
@@ -292,17 +299,13 @@ fun InventorySearchBar(db: AppDatabase) {
                     onDeleteClick = {
                         scope.launch(Dispatchers.IO) {
                             db.ItemsDao().delete(item)
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "${item.itemName} Deleted", Toast.LENGTH_SHORT).show()
-                            }
+                            withContext(Dispatchers.Main) { Toast.makeText(context, "${item.itemName} Deleted", Toast.LENGTH_SHORT).show() }
                         }
                     }
                 )
             }
         }
     }
-
-    // --- DIALOG TRIGGERS ---
 
     if (showAddDialog) {
         AddItemDialog(
@@ -337,10 +340,7 @@ fun InventorySearchBar(db: AppDatabase) {
 }
 
 @Composable
-fun AddItemDialog(
-    onDismiss: () -> Unit,
-    onAddItem: (Items) -> Unit
-) {
+fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
     var productName by remember { mutableStateOf("") }
     var stock by remember { mutableStateOf("") }
     var originalPrice by remember { mutableStateOf("") }
@@ -356,7 +356,7 @@ fun AddItemDialog(
         Card(
             shape = RoundedCornerShape(0.dp),
             border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
@@ -364,7 +364,7 @@ fun AddItemDialog(
                     text = "Add an Item",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = colorResource(id = R.color.darkBlue),
+                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
                 )
 
@@ -372,20 +372,20 @@ fun AddItemDialog(
                 DialogTextField(label = "Stock (In Pieces)", value = stock, onValueChange = { stock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(text = "Category", color = colorResource(id = R.color.darkBlue), fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(text = "Category", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
                     Box {
                         Box(
-                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(Color.LightGray).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = selectedCategory, color = Color.DarkGray, fontSize = 12.sp)
-                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.DarkGray, modifier = Modifier.size(16.dp))
+                                Text(text = selectedCategory, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                             categories.forEach { category ->
-                                DropdownMenuItem(text = { Text(text = category) }, onClick = { selectedCategory = category; expanded = false })
+                                DropdownMenuItem(text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
                             }
                         }
                     }
@@ -432,11 +432,7 @@ fun AddItemDialog(
 }
 
 @Composable
-fun EditItemDialog(
-    item: Items,
-    onDismiss: () -> Unit,
-    onSave: (Items) -> Unit
-) {
+fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) {
     var productName by remember { mutableStateOf(item.itemName ?: "") }
     var addedStock by remember { mutableStateOf("") }
     var remainingStock by remember { mutableStateOf(item.itemCurrentStock?.toString() ?: "") }
@@ -453,7 +449,7 @@ fun EditItemDialog(
         Card(
             shape = RoundedCornerShape(0.dp),
             border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
@@ -461,7 +457,7 @@ fun EditItemDialog(
                     text = "Edit \"${item.itemName}\"",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = colorResource(id = R.color.darkBlue),
+                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
                 )
 
@@ -470,20 +466,20 @@ fun EditItemDialog(
                 DialogTextField(label = "Remaining Stock (In Pieces)", value = remainingStock, onValueChange = { remainingStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(text = "Category", color = colorResource(id = R.color.darkBlue), fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+                    Text(text = "Category", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
                     Box {
                         Box(
-                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(Color.LightGray).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = selectedCategory, color = Color.DarkGray, fontSize = 12.sp)
-                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.DarkGray, modifier = Modifier.size(16.dp))
+                                Text(text = selectedCategory, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                             categories.forEach { category ->
-                                DropdownMenuItem(text = { Text(text = category) }, onClick = { selectedCategory = category; expanded = false })
+                                DropdownMenuItem(text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
                             }
                         }
                     }
@@ -534,42 +530,39 @@ fun DialogTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
-        Text(text = label, color = colorResource(id = R.color.darkBlue), fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
+        Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             keyboardOptions = keyboardOptions,
-            modifier = Modifier.fillMaxWidth(0.6f).background(Color.White).border(1.dp, Color.Gray).padding(horizontal = 8.dp, vertical = 6.dp),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface), // FIXED: Prevents invisible typing in Dark Mode
+            modifier = Modifier.fillMaxWidth(0.6f).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).padding(horizontal = 8.dp, vertical = 6.dp),
             singleLine = true
         )
     }
 }
 
 @Composable
-fun ItemCard(
-    item: Items,
-    onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
-) {
+fun ItemCard(item: Items, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = item.itemName ?: "Unknown", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    Text(text = item.itemName ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                     Text(text = item.itemCategory ?: "Uncategorized", color = Color.Gray, fontSize = 12.sp)
                     Spacer(modifier = Modifier.height(4.dp))
                     Row {
-                        Text(text = "Stock: ", color = colorResource(id = R.color.darkBlue), fontSize = 12.sp)
+                        Text(text = "Stock: ", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
                         Text(text = "${item.itemCurrentStock ?: 0}", color = Color(0xFF4CAF50), fontSize = 12.sp)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "₱${item.itemRetailPrice ?: 0}.00", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                    Text(text = "₱${item.itemRetailPrice ?: 0}.00", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Button(
@@ -579,7 +572,7 @@ fun ItemCard(
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
                     ) {
-                        Text("Edit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("Edit", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     Button(
@@ -589,14 +582,29 @@ fun ItemCard(
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
                     ) {
-                        Text("Delete", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("Delete", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
-            Box(modifier = Modifier.fillMaxWidth().background(Color(0xFFE0E0E0)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // FIXED: This creates a subtle dynamic footer that looks great in both Light & Dark modes!
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
                 Row {
-                    Text(text = "Original Price: ", color = colorResource(id = R.color.darkBlue), fontSize = 12.sp)
-                    Text(text = "₱${item.itemOriginalPrice ?: 0}.00", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(
+                        text = "Original Price: ",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "₱${item.itemOriginalPrice ?: 0}.00",
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
