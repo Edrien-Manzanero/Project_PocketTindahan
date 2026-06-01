@@ -2,9 +2,11 @@ package com.example.project_pockettindahan
 
 import AppDatabase
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -12,12 +14,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,14 +34,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,7 +56,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class DashboardActivity : ComponentActivity() {
+class DashboardActivity : AppCompatActivity () {
 
     private val db by lazy {
         Room.databaseBuilder(
@@ -59,18 +67,32 @@ class DashboardActivity : ComponentActivity() {
             .build()
     }
 
-    // 1. Create a variable that tells Compose to instantly redraw if it changes
     private val isDarkModeState = mutableStateOf(false)
+    //lang
+    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize the preferences
         prefs = PreferencesManager(this)
         isDarkModeState.value = prefs.isDarkMode()
 
         setContent {
+            val context = LocalContext.current
+            val currentLocales = appLocalesState.value
+
+            val localizedContext: android.content.Context = remember(currentLocales) {
+                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+                val locale = java.util.Locale(localeTag)
+                java.util.Locale.setDefault(locale)
+
+                val config = Configuration(context.resources.configuration)
+                config.setLocale(locale)
+
+                context.createConfigurationContext(config)
+            }
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = PT_DarkBlue,
@@ -82,34 +104,36 @@ class DashboardActivity : ComponentActivity() {
                 background = Color(0xFF121212)
             )
 
-            // Watch the State variable here
-            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    DashboardScreen(
-                        db = db,
-                        onNavigate = { storeName ->
-                            when (storeName) {
-                                "Inventory" -> startActivity(Intent(this, InventoryActivity::class.java))
-                                "Sales History" -> startActivity(Intent(this, SalesHistoryActivity::class.java))
-                                "Products" -> startActivity(Intent(this, ProductsActivity::class.java))
-                                "Debts and Due" -> startActivity(Intent(this, DebtsAndDueActivity::class.java))
-                                "Calculator" -> startActivity(Intent(this, CalculatorActivity::class.java))
-                                "Settings" -> startActivity(Intent(this, SettingsActivity::class.java))
+            // PLUGGED IN: We wrap the theme setup inside the CompositionLocalProvider
+            CompositionLocalProvider(LocalContext provides localizedContext) {
+                MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        DashboardScreen(
+                            db = db,
+                            onNavigate = { storeName ->
+                                when (storeName) {
+                                    "Inventory" -> startActivity(Intent(this, InventoryActivity::class.java))
+                                    "Sales History" -> startActivity(Intent(this, SalesHistoryActivity::class.java))
+                                    "Products" -> startActivity(Intent(this, ProductsActivity::class.java))
+                                    "Debts and Due" -> startActivity(Intent(this, DebtsAndDueActivity::class.java))
+                                    "Calculator" -> startActivity(Intent(this, CalculatorActivity::class.java))
+                                    "Settings" -> startActivity(Intent(this, SettingsActivity::class.java))
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
     }
 
-    // 2. EVERY TIME the user returns to this screen, re-read the settings!
     override fun onResume() {
         super.onResume()
-        // If the user flipped the switch in Settings, this will instantly catch it and redraw the screen
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
         }
+        // PLUGGED IN: Force update the locale state snapshot when returning from Settings
+        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -155,11 +179,13 @@ fun DashboardScreen(db: AppDatabase, onNavigate: (String) -> Unit) {
                     Image(
                         painter = painterResource(R.drawable.ic_todays_sales),
                         contentDescription = "Today's Sales",
-                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
 
+                    // PLUGGED IN: Pulls "Today's Sales" or "Benta Ngayong Araw" dynamically from XML
                     Text(
-                        text = "Today's Sales: ₱ $realTotalSales.00",
+                        text = "${stringResource(id = R.string.todays_sale)}: ₱ $realTotalSales.00",
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 18.sp
@@ -181,7 +207,7 @@ fun MenuButton(label: String, iconId: Int, onClick: () -> Unit, modifier: Modifi
         border = BorderStroke(width = 4.dp, color = PT_RedAccent),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(1f)
             .clickable { onClick() }
     ) {
@@ -215,11 +241,11 @@ fun DashboardGrid(onItemClick: (String) -> Unit, modifier: Modifier = Modifier) 
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = modifier.fillMaxSize()
     ) {
-        item { MenuButton(label = "Inventory", iconId = R.drawable.ic_inventory, onClick = { onItemClick("Inventory") }) }
-        item { MenuButton(label = "Sales History", iconId = R.drawable.ic_sales_history, onClick = { onItemClick("Sales History") }) }
-        item { MenuButton(label = "Products", iconId = R.drawable.ic_products, onClick = { onItemClick("Products") }) }
-        item { MenuButton(label = "DebtsAndDue", iconId = R.drawable.ic_debts_and_due, onClick = { onItemClick("Debts and Due") }) }
-        item { MenuButton(label = "Calculator", iconId = R.drawable.ic_calculator, onClick = { onItemClick("Calculator") }) }
-        item { MenuButton(label = "Settings", iconId = R.drawable.ic_settings, onClick = { onItemClick("Settings") }) }
+        item { MenuButton(label = stringResource(id = R.string.inventory), iconId = R.drawable.ic_inventory, onClick = { onItemClick("Inventory") }) }
+        item { MenuButton(label = stringResource(id = R.string.Sales_history), iconId = R.drawable.ic_sales_history, onClick = { onItemClick("Sales History") }) }
+        item { MenuButton(label = stringResource(id = R.string.Products), iconId = R.drawable.ic_products, onClick = { onItemClick("Products") }) }
+        item { MenuButton(label = stringResource(id = R.string.Debts_and_due), iconId = R.drawable.ic_debts_and_due, onClick = { onItemClick("Debts and Due") }) }
+        item { MenuButton(label = stringResource(id = R.string.Calculator), iconId = R.drawable.ic_calculator, onClick = { onItemClick("Calculator") }) }
+        item { MenuButton(label = stringResource(id = R.string.Settings), iconId = R.drawable.ic_settings, onClick = { onItemClick("Settings") }) }
     }
 }

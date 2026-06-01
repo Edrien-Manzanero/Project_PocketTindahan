@@ -1,13 +1,13 @@
 package com.example.project_pockettindahan
 
-// Ensure these match your actual files
 import AppDatabase
 import Sales
 import SalesItem
-
+import android.content.res.Configuration
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,8 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,12 +47,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class SalesHistoryActivity : ComponentActivity() {
+// FIXED: Extended AppCompatActivity for seamless localization state management
+class SalesHistoryActivity : AppCompatActivity() {
 
     private val isDarkModeState = mutableStateOf(false)
+    // FIXED: Track application locale states safely
+    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
-    // Initialize your database
     private val db by lazy {
         Room.databaseBuilder(
             applicationContext,
@@ -66,7 +71,20 @@ class SalesHistoryActivity : ComponentActivity() {
         isDarkModeState.value = prefs.isDarkMode()
 
         setContent {
-            // DEFINE THE COLORS
+            val context = LocalContext.current
+            val currentLocales = appLocalesState.value
+
+            val localizedContext: android.content.Context = remember(currentLocales) {
+                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+                val locale = java.util.Locale(localeTag)
+                java.util.Locale.setDefault(locale)
+
+                val config = Configuration(context.resources.configuration)
+                config.setLocale(locale)
+
+                context.createConfigurationContext(config)
+            }
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -78,21 +96,24 @@ class SalesHistoryActivity : ComponentActivity() {
                 background = Color(0xFF121212)
             )
 
-            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
-                // FIXED: Removed the nested setContent and placed SalesScreen directly inside the Surface
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    SalesScreen(db)
+            // FIXED: Wrapped interface in CompositionLocalProvider to intercept language changes downstream
+            CompositionLocalProvider(LocalContext provides localizedContext) {
+                MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        SalesScreen(db)
+                    }
                 }
             }
         }
     }
 
-    // ADDED: This makes the screen instantly refresh when coming back from Settings
     override fun onResume() {
         super.onResume()
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
         }
+        // FIXED: Refresh context locale bindings dynamically on focus resume
+        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -103,9 +124,14 @@ fun SalesScreen(db: AppDatabase) {
     val salesList by db.SalesDao().getAll().collectAsState(initial = emptyList())
 
     var selectedTab by remember { mutableStateOf("Daily") }
-    val tabs = listOf("Daily", "Weekly", "Monthly", "Annually")
+    // FIXED: Mapped tab metrics to localization resources pairs
+    val tabs = listOf(
+        "Daily" to R.string.tab_daily,
+        "Weekly" to R.string.tab_weekly,
+        "Monthly" to R.string.tab_monthly,
+        "Annually" to R.string.tab_annually
+    )
 
-    // State to track which sale to show in the popup
     var saleToView by remember { mutableStateOf<Sales?>(null) }
 
     val sdfOut = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
@@ -117,7 +143,6 @@ fun SalesScreen(db: AppDatabase) {
     val totalProfit = salesList.sumOf { it.salesProfit ?: 0 }
 
     Scaffold(
-        // Ensure Scaffold background uses our theme
         containerColor = Color.Transparent,
         topBar = {
             CenterAlignedTopAppBar(
@@ -145,7 +170,6 @@ fun SalesScreen(db: AppDatabase) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                // CHANGED: Use Theme background
                 .background(MaterialTheme.colorScheme.background)
                 .padding(15.dp)
                 .border(4.dp, colorResource(id = R.color.darkBlue), RoundedCornerShape(16.dp)),
@@ -153,22 +177,19 @@ fun SalesScreen(db: AppDatabase) {
         ) {
 
             Text(
-                text = "Sales",
+                text = stringResource(id = R.string.sales_title),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
-                // CHANGED: Use Theme text color
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
 
-            // --- SUMMARY CARD ---
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                // CHANGED: Use Theme surface color
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, Color.Gray)
             ) {
@@ -176,12 +197,11 @@ fun SalesScreen(db: AppDatabase) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            // CHANGED: Dynamic header background (light gray in light mode, dark gray in dark mode)
                             .background(if (MaterialTheme.colorScheme.background == Color(0xFF121212)) Color.DarkGray else Color(0xFFE0E0E0))
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = "Today's Sales",
+                            text = stringResource(id = R.string.todays_sales),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -189,29 +209,27 @@ fun SalesScreen(db: AppDatabase) {
                     }
 
                     Column(modifier = Modifier.padding(16.dp)) {
-                        SummaryRow(label = "Date:", value = currentDateDisplay)
-                        SummaryRow(label = "Total Sales:", value = "₱ $totalSales.00")
-                        SummaryRow(label = "Total Items Sold:", value = "$totalItemsSold")
-                        SummaryRow(label = "Transactions:", value = "$transactionsCount")
-                        SummaryRow(label = "Total Profit:", value = "₱ $totalProfit.00")
+                        SummaryRow(label = stringResource(id = R.string.date_label), value = currentDateDisplay)
+                        SummaryRow(label = stringResource(id = R.string.total_sales_label), value = "₱ $totalSales.00")
+                        SummaryRow(label = stringResource(id = R.string.total_items_sold_label), value = "$totalItemsSold")
+                        SummaryRow(label = stringResource(id = R.string.transactions_label), value = "$transactionsCount")
+                        SummaryRow(label = stringResource(id = R.string.total_profit_label), value = "₱ $totalProfit.00")
                     }
                 }
             }
 
-            // --- TABS ---
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-                tabs.forEach { tab ->
-                    val isSelected = selectedTab == tab
+                tabs.forEach { (tabKey, tabResId) ->
+                    val isSelected = selectedTab == tabKey
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .background(
-                                // CHANGED: Active tab is Blue, inactive tab uses Surface color
                                 color = if (isSelected) colorResource(id = R.color.darkBlue) else MaterialTheme.colorScheme.surface,
                                 shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
                             )
@@ -220,16 +238,15 @@ fun SalesScreen(db: AppDatabase) {
                                 color = if (isSelected) colorResource(id = R.color.darkBlue) else Color.Gray,
                                 shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
                             )
-                            .clickable { selectedTab = tab }
+                            .clickable { selectedTab = tabKey }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = tab,
-                            // CHANGED: Active text is White, inactive text uses Theme text color
+                            text = stringResource(id = tabResId),
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 11.sp // Snapped slightly smaller to keep Tagalog words from clipping
                         )
                     }
                 }
@@ -237,19 +254,17 @@ fun SalesScreen(db: AppDatabase) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- TRANSACTIONS LIST ---
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    // CHANGED: Use Theme surface color
                     .background(MaterialTheme.colorScheme.surface)
                     .border(1.dp, Color.Gray)
             ) {
                 if (salesList.isEmpty()) {
                     item {
                         Text(
-                            text = "No sales recorded yet.",
+                            text = stringResource(id = R.string.no_sales_recorded),
                             color = Color.Gray,
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
                             textAlign = TextAlign.Center
@@ -257,7 +272,6 @@ fun SalesScreen(db: AppDatabase) {
                     }
                 } else {
                     items(salesList) { sale ->
-                        // Pass the sale up when clicked
                         TransactionRow(sale = sale, onViewClick = { saleToView = sale })
                         HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                     }
@@ -266,12 +280,11 @@ fun SalesScreen(db: AppDatabase) {
         }
     }
 
-    // --- RECEIPT POPUP ---
     saleToView?.let { sale ->
         ReceiptDialog(
             db = db,
             sale = sale,
-            onDismiss = { saleToView = null } // Closes the popup
+            onDismiss = { saleToView = null }
         )
     }
 }
@@ -284,14 +297,12 @@ fun SummaryRow(label: String, value: String) {
     ) {
         Text(
             text = label,
-            // CHANGED: Use Theme text color
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = 14.sp,
-            modifier = Modifier.width(130.dp)
+            modifier = Modifier.width(135.dp)
         )
         Text(
             text = value,
-            // CHANGED: Use Theme text color
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.ExtraBold,
             fontSize = 14.sp
@@ -302,6 +313,7 @@ fun SummaryRow(label: String, value: String) {
 @Composable
 fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
     val formattedId = String.format("%03d", sale.sales_id)
+    val fallbackTime = stringResource(id = R.string.unknown_time)
 
     Row(
         modifier = Modifier
@@ -311,8 +323,7 @@ fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "${sale.salesTime ?: "Unknown Time"} | Sale #$formattedId",
-            // CHANGED: Use Theme text color
+            text = "${sale.salesTime ?: fallbackTime} | Sale #$formattedId",
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.ExtraBold,
             fontSize = 14.sp
@@ -321,7 +332,6 @@ fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "₱ ${sale.salesTotalSales ?: 0}.00",
-                // CHANGED: Use Theme text color
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 14.sp
@@ -334,13 +344,12 @@ fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.height(28.dp)
             ) {
-                Text(text = "View", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(text = stringResource(id = R.string.view_action), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-// --- NEW RECEIPT DIALOG ---
 @Composable
 fun ReceiptDialog(db: AppDatabase, sale: Sales, onDismiss: () -> Unit) {
     var receiptItems by remember { mutableStateOf<List<SalesItem>>(emptyList()) }
@@ -356,18 +365,15 @@ fun ReceiptDialog(db: AppDatabase, sale: Sales, onDismiss: () -> Unit) {
         Card(
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(4.dp, colorResource(id = R.color.darkBlue)),
-            // CHANGED: Dialog background respects Theme
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
 
-                // Receipt Header
                 Text(
-                    text = "Receipt #$formattedId",
+                    text = stringResource(id = R.string.receipt_title, formattedId),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    // CHANGED: Text respects Theme
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
@@ -383,12 +389,11 @@ fun ReceiptDialog(db: AppDatabase, sale: Sales, onDismiss: () -> Unit) {
                 HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Scrollable List of Items
                 LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                     if (receiptItems.isEmpty()) {
                         item {
                             Text(
-                                text = "Loading items...",
+                                text = stringResource(id = R.string.loading_items),
                                 color = Color.Gray,
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                                 textAlign = TextAlign.Center
@@ -418,25 +423,23 @@ fun ReceiptDialog(db: AppDatabase, sale: Sales, onDismiss: () -> Unit) {
                 HorizontalDivider(color = Color.Gray, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Total
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total Paid:", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = stringResource(id = R.string.total_paid_label), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text("₱${sale.salesTotalSales}.00", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4CAF50))
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Close Button
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
-                    Text(text = "Close", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(text = stringResource(id = R.string.close_action), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }

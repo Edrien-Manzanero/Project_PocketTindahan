@@ -2,9 +2,11 @@ package com.example.project_pockettindahan
 
 import AppDatabase
 import Debt
+import android.content.res.Configuration
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,9 +41,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class DebtsAndDueActivity : ComponentActivity() {
+// FIXED: Extended AppCompatActivity for seamless system runtime localization
+class DebtsAndDueActivity : AppCompatActivity() {
 
     private val isDarkModeState = mutableStateOf(false)
+    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
     private val db by lazy {
@@ -59,6 +64,20 @@ class DebtsAndDueActivity : ComponentActivity() {
         isDarkModeState.value = prefs.isDarkMode()
 
         setContent {
+            val context = LocalContext.current
+            val currentLocales = appLocalesState.value
+
+            val localizedContext: android.content.Context = remember(currentLocales) {
+                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+                val locale = java.util.Locale(localeTag)
+                java.util.Locale.setDefault(locale)
+
+                val config = Configuration(context.resources.configuration)
+                config.setLocale(locale)
+
+                context.createConfigurationContext(config)
+            }
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -70,9 +89,12 @@ class DebtsAndDueActivity : ComponentActivity() {
                 background = Color(0xFF121212)
             )
 
-            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    DebtsScreen(db)
+            // FIXED: Enclosed the screen elements inside the localized configuration container provider
+            CompositionLocalProvider(LocalContext provides localizedContext) {
+                MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        DebtsScreen(db)
+                    }
                 }
             }
         }
@@ -83,6 +105,7 @@ class DebtsAndDueActivity : ComponentActivity() {
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
         }
+        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -134,7 +157,7 @@ fun DebtsScreen(db: AppDatabase) {
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.padding(16.dp)
             ) {
-                Text(text = "Add Entry", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                Text(text = stringResource(id = R.string.add_entry_btn), color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
             }
         }
     ) { innerPadding ->
@@ -142,13 +165,13 @@ fun DebtsScreen(db: AppDatabase) {
             modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "Debts/Dues", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 12.dp))
+            Text(text = stringResource(id = R.string.debts_dues_title), fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 12.dp))
 
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)),
-                placeholder = { Text("Search Customer", color = Color.Gray) },
+                placeholder = { Text(text = stringResource(id = R.string.search_customer_placeholder), color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -163,19 +186,24 @@ fun DebtsScreen(db: AppDatabase) {
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                val tabs = listOf("Unpaid", "Paid", "Overdue")
-                tabs.forEachIndexed { index, tab ->
-                    val isSelected = selectedTab == tab
+                // FIXED: Map categories to key-resource pairs so internal sorting strings remain safe
+                val tabs = listOf(
+                    "Unpaid" to R.string.tab_unpaid,
+                    "Paid" to R.string.tab_paid,
+                    "Overdue" to R.string.tab_overdue
+                )
+                tabs.forEachIndexed { index, (tabKey, tabResId) ->
+                    val isSelected = selectedTab == tabKey
                     val shape = when (index) {
                         0 -> RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp)
                         tabs.size - 1 -> RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
                         else -> RoundedCornerShape(0.dp)
                     }
                     Box(
-                        modifier = Modifier.weight(1f).background(if (isSelected) colorResource(id = R.color.darkBlue) else MaterialTheme.colorScheme.surface, shape).border(1.dp, if (isSelected) colorResource(id = R.color.darkBlue) else Color.Gray, shape).clickable { selectedTab = tab }.padding(vertical = 8.dp),
+                        modifier = Modifier.weight(1f).background(if (isSelected) colorResource(id = R.color.darkBlue) else MaterialTheme.colorScheme.surface, shape).border(1.dp, if (isSelected) colorResource(id = R.color.darkBlue) else Color.Gray, shape).clickable { selectedTab = tabKey }.padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = tab, color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(text = stringResource(id = tabResId), color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
             }
@@ -223,17 +251,17 @@ fun DebtCard(debt: Debt, onMarkPaid: () -> Unit, onEditClick: () -> Unit, onDele
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = debt.debtName ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                Text(text = debt.debtName ?: stringResource(id = R.string.unknown_label), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
                 Row {
-                    Text("Amount: ", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text("₱ ${debt.debtAmount}.00", fontSize = 12.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+                    Text(text = stringResource(id = R.string.amount_label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = "₱ ${debt.debtAmount}.00", fontSize = 12.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
                 }
-                Text("Due: ${debt.debtDate}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = stringResource(id = R.string.due_label, debt.debtDate ?: ""), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (debt.debtStatus != "Paid") ActionButton("Mark Paid", Color(0xFF2E7D32), onMarkPaid)
-                ActionButton("Edit", colorResource(id = R.color.darkBlue), onEditClick)
-                ActionButton("Delete", Color(0xFFC62828), onDelete)
+                if (debt.debtStatus != "Paid") ActionButton(stringResource(id = R.string.mark_paid_action), Color(0xFF2E7D32), onMarkPaid)
+                ActionButton(stringResource(id = R.string.edit_action), colorResource(id = R.color.darkBlue), onEditClick)
+                ActionButton(stringResource(id = R.string.delete_action), Color(0xFFC62828), onDelete)
             }
         }
     }
@@ -267,9 +295,9 @@ fun EditDebtDialog(debt: Debt, onDismiss: () -> Unit, onSave: (Debt) -> Unit) {
                         dueDate = sdf.format(Date(it))
                     }
                     showDatePicker = false
-                }) { Text("OK", color = colorResource(id = R.color.darkBlue)) }
+                }) { Text(text = stringResource(id = R.string.ok_action), color = colorResource(id = R.color.darkBlue)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel", color = Color.Gray) } },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(text = stringResource(id = R.string.cancel_action), color = Color.Gray) } },
             colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface, titleContentColor = colorResource(id = R.color.darkBlue))
         ) { DatePicker(state = datePickerState) }
     }
@@ -277,27 +305,27 @@ fun EditDebtDialog(debt: Debt, onDismiss: () -> Unit, onSave: (Debt) -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Edit Entry", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = stringResource(id = R.string.edit_entry_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
                 val customColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colorResource(id = R.color.darkBlue), cursorColor = colorResource(id = R.color.darkBlue), focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface)
 
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Customer Name") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = customColors)
-                OutlinedTextField(value = payment, onValueChange = { payment = it }, label = { Text("Deduct Payment (₱)") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF2E7D32), focusedTextColor = MaterialTheme.colorScheme.onSurface))
-                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Total Balance (₱)") }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = customColors)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(text = stringResource(id = R.string.customer_name_label)) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = customColors)
+                OutlinedTextField(value = payment, onValueChange = { payment = it }, label = { Text(text = stringResource(id = R.string.deduct_payment_label)) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF2E7D32), focusedTextColor = MaterialTheme.colorScheme.onSurface))
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text(text = stringResource(id = R.string.total_balance_label)) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = customColors)
 
                 Box(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
-                    OutlinedTextField(value = dueDate, onValueChange = {}, label = { Text("Due Date") }, modifier = Modifier.fillMaxWidth(), enabled = false, readOnly = true, trailingIcon = { Icon(Icons.Default.DateRange, null, tint = colorResource(id = R.color.darkBlue)) }, colors = customColors)
+                    OutlinedTextField(value = dueDate, onValueChange = {}, label = { Text(text = stringResource(id = R.string.due_date_label)) }, modifier = Modifier.fillMaxWidth(), enabled = false, readOnly = true, trailingIcon = { Icon(Icons.Default.DateRange, null, tint = colorResource(id = R.color.darkBlue)) }, colors = customColors)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
+                    TextButton(onClick = onDismiss) { Text(text = stringResource(id = R.string.cancel_action), color = Color.Gray) }
                     Button(
                         onClick = {
                             val finalAmount = (amount.toIntOrNull() ?: 0) - (payment.toIntOrNull() ?: 0)
                             onSave(debt.copy(debtName = name, debtAmount = if (finalAmount > 0) finalAmount else 0, debtDate = dueDate, debtStatus = if (finalAmount <= 0) "Paid" else debt.debtStatus))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
-                    ) { Text("Update", color = Color.White) }
+                    ) { Text(text = stringResource(id = R.string.update_action), color = Color.White) }
                 }
             }
         }
@@ -323,25 +351,26 @@ fun AddDebtDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Uni
                         dueDate = sdf.format(Date(it))
                     }
                     showDatePicker = false
-                }) { Text("OK", color = colorResource(id = R.color.darkBlue)) }
+                }) { Text(text = stringResource(id = R.string.ok_action), color = colorResource(id = R.color.darkBlue)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel", color = Color.Gray) } }
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(text = stringResource(id = R.string.cancel_action), color = Color.Gray) } }
         ) { DatePicker(state = datePickerState) }
     }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Add New Debt", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 12.dp))
+                Text(text = stringResource(id = R.string.add_new_debt_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 12.dp))
                 val customColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colorResource(id = R.color.darkBlue), focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface)
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Customer Name") }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = customColors)
-                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount (₱)") }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = customColors)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(text = stringResource(id = R.string.customer_name_label)) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = customColors)
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text(text = stringResource(id = R.string.amount_currency_label)) }, modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), colors = customColors)
                 Box(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).clickable { showDatePicker = true }) {
-                    OutlinedTextField(value = dueDate.ifEmpty { "Select Date" }, onValueChange = {}, label = { Text("Due Date") }, modifier = Modifier.fillMaxWidth(), enabled = false, readOnly = true, trailingIcon = { Icon(Icons.Default.DateRange, null, tint = colorResource(id = R.color.darkBlue)) }, colors = customColors)
+                    val dateFieldPlaceholder = dueDate.ifEmpty { stringResource(id = R.string.select_date_placeholder) }
+                    OutlinedTextField(value = dateFieldPlaceholder, onValueChange = {}, label = { Text(text = stringResource(id = R.string.due_date_label)) }, modifier = Modifier.fillMaxWidth(), enabled = false, readOnly = true, trailingIcon = { Icon(Icons.Default.DateRange, null, tint = colorResource(id = R.color.darkBlue)) }, colors = customColors)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
-                    Button(onClick = { onSave(name, amount, dueDate) }, colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))) { Text("Save", color = Color.White) }
+                    TextButton(onClick = onDismiss) { Text(text = stringResource(id = R.string.cancel_action), color = Color.Gray) }
+                    Button(onClick = { onSave(name, amount, dueDate) }, colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))) { Text(text = stringResource(id = R.string.save_action), color = Color.White) }
                 }
             }
         }

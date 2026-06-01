@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Project_PocketTindahan</string>
+    //Settings na may konting translation
+    <string name="label_language">Wika</string>
+    <string name="label_dark_mode">Madilim na tema</string>>
+    <string name="dialog_select_language">Pumili ng Wika</string>
+    <string name="lang_english">Ingles</string>>
+    <string name="lang_tagalog">Tagalog</string>>
+    <string name="btn_cancel">Kanselahin</string>>
+
+    //Dashboard na sumisigaw ng help
+    <string name="todays_sale">benta ngayon</string>>
+    <string name="inventory">Imbentaryo</string>>
+    <string name="Sales_history">Nakaraang Benta</string>>
+    <string name="Debts_and_due">Mga utang at bayaran</string>>
+    <string name="Products">Produkto</string>>
+    <string name="Calculator">Kalkulador</string>
+    <string name="Settings">Mga Settings</string>>
+
+    //inventory ng mga lahat
+    <string name="inventory_app">Imbentaryo</string>
+    <string name="search_products">maghanap ng produkto</string>
+    <string name="category_label">Kategorya</string>
+    <string name="add_btn_label">+ Dagdag</string>
+    <string name="add_item_title">Magdagdag ng Item</string>
+    <string name="edit_item_title">Baguhin ang Item</string>
+    <string name="product_name_label">Pangalan ng Produkto</string>
+    <string name="stock_pieces_label">Stock (Kada Piraso)</string>
+    <string name="added_stock_label">Karagdagang Stock</string>
+    <string name="remaining_stock_label">Natitirang Stock</string>
+    <string name="original_price_label">Puhunang Presyo</string>
+    <string name="retail_price_label">Presyong Tingi</string>
+    <string name="input_category_label">Pumili ng Kategorya</string>
+    <string name="edit_action">Baguhin</string>
+    <string name="delete_action">Burahin</string>
+    <string name="save_action">I-save</string>
+    <string name="add_action">Idagdag</string>
+
+    //sales history
+    <string name="sales_title">Mga Benta</string>
+    <string name="todays_sales">Benta Ngayong Araw</string>
+    <string name="date_label">Petsa:</string>
+    <string name="total_sales_label">Kabuuan ng Benta:</string>
+    <string name="total_items_sold_label">Kabuuang Naibenta:</string>
+    <string name="transactions_label">Mga Transaksyon:</string>
+    <string name="total_profit_label">Kabuuang Tubo:</string>
+    <string name="no_sales_recorded">Wala pang naitalang benta.</string>
+    <string name="view_action">Tingnan</string>
+    <string name="receipt_title">Resibo #%1$s</string>
+    <string name="loading_items">Nagkakarga ng mga item…</string>
+    <string name="total_paid_label">Kabuuang Bayad:</string>
+    <string name="close_action">Isara</string>
+    <string name="tab_daily">Arawan</string>
+    <string name="tab_weekly">Lingguhan</string>
+    <string name="tab_monthly">Buwanan</string>
+    <string name="tab_annually">Taunan</string>
+    <string name="unknown_time">Hindi Alam na Oras</string>
+
+    //Debts at mga due yes yes
+    <string name="debts_dues_title">Mga Utang at Singilin</string>
+    <string name="add_entry_btn">Magdagdag</string>
+    <string name="search_customer_placeholder">Maghanap ng Suki</string>
+    <string name="tab_unpaid">Hindi Bayad</string>
+    <string name="tab_paid">Bayad Na</string>
+    <string name="tab_overdue">Nalampasan sa Araw</string>
+    <string name="amount_label">Halaga: </string>
+    <string name="due_label">Nakatakda: %1$s</string>
+    <string name="mark_paid_action">Markahang Bayad</string>
+    <string name="edit_entry_title">Baguhin ang Datos</string>
+    <string name="customer_name_label">Pangalan ng Suki</string>
+    <string name="deduct_payment_label">Iawas ang Bayad (₱)</string>
+    <string name="total_balance_label">Kabuuang Balanse (₱)</string>
+    <string name="due_date_label">Araw ng Singilin</string>
+    <string name="cancel_action">Kanselahin</string>
+    <string name="update_action">I-update</string>
+    <string name="add_new_debt_title">Bagong Listang Utang</string>
+    <string name="amount_currency_label">Halaga (₱)</string>
+    <string name="select_date_placeholder">Pumili ng Petsa</string>
+    <string name="ok_action">OK</string>
+    <string name="unknown_label">Hindi Alam</string>
+</resources>

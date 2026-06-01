@@ -1,3 +1,81 @@
 <resources>
     <string name="app_name">Project_PocketTindahan</string>
+    //Settings na may konting translation
+    <string name="label_language">Language</string>
+    <string name="label_dark_mode">Dark Mode</string>>
+    <string name="dialog_select_language">Select Language</string>
+    <string name="lang_english">English</string>>
+    <string name="lang_tagalog">Tagalog</string>>
+    <string name="btn_cancel">Cancel</string>>
+
+    //Dashboard na sumisigaw ng tulong
+    <string name="todays_sale">todays sale</string>>
+    <string name="inventory">Inventory</string>>
+    <string name="Sales_history">Sales History</string>>
+    <string name="Debts_and_due">DebtsAndDue</string>>
+    <string name="Products">Products</string>>
+    <string name="Calculator">Calculator</string>
+    <string name="Settings">Settings</string>>
+
+    //Inventory
+    <string name="inventory_app">Inventory</string>
+    <string name="search_products">search products</string>
+    <string name="category_label">Category</string>
+    <string name="add_btn_label">+ Add</string>
+    <string name="add_item_title">Add an Item</string>
+    <string name="edit_item_title">Edit Item</string>
+    <string name="product_name_label">Product Name</string>
+    <string name="stock_pieces_label">Stock (In Pieces)</string>
+    <string name="added_stock_label">Added Stock (In Pieces)</string>
+    <string name="remaining_stock_label">Remaining Stock (In Pieces)</string>
+    <string name="original_price_label">Original Price</string>
+    <string name="retail_price_label">Retail Price</string>
+    <string name="input_category_label">Input Category</string>
+    <string name="edit_action">Edit</string>
+    <string name="delete_action">Delete</string>
+    <string name="save_action">Save</string>
+    <string name="add_action">Add</string>
+
+    //Sales History
+    <string name="sales_title">Sales</string>
+    <string name="todays_sales">Today\'s Sales</string>
+    <string name="date_label">Date:</string>
+    <string name="total_sales_label">Total Sales:</string>
+    <string name="total_items_sold_label">Total Items Sold:</string>
+    <string name="transactions_label">Transactions:</string>
+    <string name="total_profit_label">Total Profit:</string>
+    <string name="no_sales_recorded">No sales recorded yet.</string>
+    <string name="view_action">View</string>
+    <string name="receipt_title">Receipt #%1$s</string>
+    <string name="loading_items">Loading items…</string>
+    <string name="total_paid_label">Total Paid:</string>
+    <string name="close_action">Close</string>
+    <string name="tab_daily">Daily</string>
+    <string name="tab_weekly">Weekly</string>
+    <string name="tab_monthly">Monthly</string>
+    <string name="tab_annually">Annually</string>
+    <string name="unknown_time">Unknown Time</string>
+
+    //Debts and Due
+    <string name="debts_dues_title">Debts/Dues</string>
+    <string name="add_entry_btn">Add Entry</string>
+    <string name="search_customer_placeholder">Search Customer</string>
+    <string name="tab_unpaid">Unpaid</string>
+    <string name="tab_paid">Paid</string>
+    <string name="tab_overdue">Overdue</string>
+    <string name="amount_label">Amount: </string>
+    <string name="due_label">Due: %1$s</string>
+    <string name="mark_paid_action">Mark Paid</string>
+    <string name="edit_entry_title">Edit Entry</string>
+    <string name="customer_name_label">Customer Name</string>
+    <string name="deduct_payment_label">Deduct Payment (₱)</string>
+    <string name="total_balance_label">Total Balance (₱)</string>
+    <string name="due_date_label">Due Date</string>
+    <string name="cancel_action">Cancel</string>
+    <string name="update_action">Update</string>
+    <string name="add_new_debt_title">Add New Debt</string>
+    <string name="amount_currency_label">Amount (₱)</string>
+    <string name="select_date_placeholder">Select Date</string>
+    <string name="ok_action">OK</string>
+    <string name="unknown_label">Unknown</string>
 </resources>

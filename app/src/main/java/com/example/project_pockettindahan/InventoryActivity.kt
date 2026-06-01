@@ -2,10 +2,12 @@ package com.example.project_pockettindahan
 
 import AppDatabase
 import Items
+import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -51,6 +53,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,9 +79,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class InventoryActivity: ComponentActivity(){
+class InventoryActivity: AppCompatActivity () {
 
     private val isDarkModeState = mutableStateOf(false)
+    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
     private val db by lazy {
@@ -94,6 +99,20 @@ class InventoryActivity: ComponentActivity(){
         isDarkModeState.value = prefs.isDarkMode()
 
         setContent {
+            val context = LocalContext.current
+            val currentLocales = appLocalesState.value
+
+            val localizedContext: android.content.Context = remember(currentLocales) {
+                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+                val locale = java.util.Locale(localeTag)
+                java.util.Locale.setDefault(locale)
+
+                val config = Configuration(context.resources.configuration)
+                config.setLocale(locale)
+
+                context.createConfigurationContext(config)
+            }
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -105,10 +124,12 @@ class InventoryActivity: ComponentActivity(){
                 background = Color(0xFF121212)
             )
 
-            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
-                // FIXED: Placed Message(db) inside the Surface instead of a nested setContent
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Message(db)
+            // FIXED: Wrapped layout inside CompositionLocalProvider to pass down localized resources smoothly
+            CompositionLocalProvider(LocalContext provides localizedContext) {
+                MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Message(db)
+                    }
                 }
             }
         }
@@ -119,6 +140,7 @@ class InventoryActivity: ComponentActivity(){
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
         }
+        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -126,17 +148,17 @@ class InventoryActivity: ComponentActivity(){
 @Composable
 fun Message(db: AppDatabase) {
     Scaffold(
-        containerColor = Color.Transparent, // Let the Surface handle the background color
+        containerColor = Color.Transparent,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Surface(
                         shape = CircleShape,
-                        color = Color.White, // FIXED: Changed to transparent to fit logo
+                        color = Color.White,
                         modifier = Modifier.size(45.dp)
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.img), // Make sure this matches your logo
+                            painter = painterResource(id = R.drawable.img),
                             contentDescription = "Logo",
                             modifier = Modifier
                                 .fillMaxSize()
@@ -191,10 +213,10 @@ fun InventorySearchBar(db: AppDatabase) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Inventory",
+            text = stringResource(id = R.string.inventory_app),
             fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface, // DYNAMIC TEXT
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
@@ -204,7 +226,7 @@ fun InventorySearchBar(db: AppDatabase) {
                 .padding(horizontal = 16.dp),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // DYNAMIC CARD BACKGROUND
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Row(
                 modifier = Modifier
@@ -217,7 +239,8 @@ fun InventorySearchBar(db: AppDatabase) {
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = {
-                        Text(text = "search products", color = Color.Gray, fontSize = 14.sp)
+                        // CONNECTED LOCALIZATION STRINGS
+                        Text(text = stringResource(id = R.string.search_products), color = Color.Gray, fontSize = 14.sp)
                     },
                     leadingIcon = {
                         Icon(imageVector = Icons.Default.Search, contentDescription = "Search Icon", tint = Color.Gray, modifier = Modifier.size(20.dp))
@@ -230,10 +253,10 @@ fun InventorySearchBar(db: AppDatabase) {
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedBorderColor = Color.Gray,
                         focusedBorderColor = colorResource(id = R.color.darkBlue),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface, // DYNAMIC
-                        focusedContainerColor = MaterialTheme.colorScheme.surface, // DYNAMIC
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface, // DYNAMIC
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface // DYNAMIC
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     )
                 )
 
@@ -250,7 +273,8 @@ fun InventorySearchBar(db: AppDatabase) {
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "Category", color = Color.White, fontSize = 14.sp)
+                            // CONNECTED LOCALIZATION STRINGS
+                            Text(text = stringResource(id = R.string.category_label), color = Color.White, fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.White)
                         }
@@ -281,7 +305,8 @@ fun InventorySearchBar(db: AppDatabase) {
                     colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
                     modifier = Modifier.height(50.dp)
                 ) {
-                    Text(text = "+ Add", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    // CONNECTED LOCALIZATION STRINGS
+                    Text(text = stringResource(id = R.string.add_btn_label), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
@@ -356,30 +381,31 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
         Card(
             shape = RoundedCornerShape(0.dp),
             border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
                 Text(
-                    text = "Add an Item",
+                    text = stringResource(id = R.string.add_item_title),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
                 )
 
-                DialogTextField(label = "Product Name", value = productName, onValueChange = { productName = it })
-                DialogTextField(label = "Stock (In Pieces)", value = stock, onValueChange = { stock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.product_name_label), value = productName, onValueChange = { productName = it })
+                DialogTextField(label = stringResource(id = R.string.stock_pieces_label), value = stock, onValueChange = { stock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(text = "Category", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
+                    Text(text = stringResource(id = R.string.category_label), color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
                     Box {
                         Box(
                             modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = selectedCategory, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                val resolvedCategoryLabel = if (selectedCategory == "Input Category") stringResource(id = R.string.input_category_label) else selectedCategory
+                                Text(text = resolvedCategoryLabel, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
                                 Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
@@ -391,8 +417,8 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
                     }
                 }
 
-                DialogTextField(label = "Original Price", value = originalPrice, onValueChange = { originalPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                DialogTextField(label = "Retail Price", value = retailPrice, onValueChange = { retailPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.original_price_label), value = originalPrice, onValueChange = { originalPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.retail_price_label), value = retailPrice, onValueChange = { retailPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -422,9 +448,9 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
                     },
                     shape = RoundedCornerShape(4.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.align(Alignment.End).height(40.dp).width(80.dp)
+                    modifier = Modifier.align(Alignment.End).height(40.dp).width(90.dp)
                 ) {
-                    Text(text = "Add", color = Color.White, fontSize = 16.sp)
+                    Text(text = stringResource(id = R.string.add_action), color = Color.White, fontSize = 14.sp)
                 }
             }
         }
@@ -449,31 +475,32 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
         Card(
             shape = RoundedCornerShape(0.dp),
             border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
                 Text(
-                    text = "Edit \"${item.itemName}\"",
-                    fontSize = 20.sp,
+                    text = "${stringResource(id = R.string.edit_item_title)}: \"${item.itemName}\"",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 16.dp)
                 )
 
-                DialogTextField(label = "Product Name", value = productName, onValueChange = { productName = it })
-                DialogTextField(label = "Added Stock (In Pieces)", value = addedStock, onValueChange = { addedStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                DialogTextField(label = "Remaining Stock (In Pieces)", value = remainingStock, onValueChange = { remainingStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.product_name_label), value = productName, onValueChange = { productName = it })
+                DialogTextField(label = stringResource(id = R.string.added_stock_label), value = addedStock, onValueChange = { addedStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.remaining_stock_label), value = remainingStock, onValueChange = { remainingStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(text = "Category", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
+                    Text(text = stringResource(id = R.string.category_label), color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
                     Box {
                         Box(
                             modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = selectedCategory, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                val resolvedCategoryLabel = if (selectedCategory == "Input Category") stringResource(id = R.string.input_category_label) else selectedCategory
+                                Text(text = resolvedCategoryLabel, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
                                 Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
@@ -485,8 +512,8 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
                     }
                 }
 
-                DialogTextField(label = "Original Price", value = originalPrice, onValueChange = { originalPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                DialogTextField(label = "Retail Price", value = retailPrice, onValueChange = { retailPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.original_price_label), value = originalPrice, onValueChange = { originalPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                DialogTextField(label = stringResource(id = R.string.retail_price_label), value = retailPrice, onValueChange = { retailPrice = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -515,7 +542,7 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                     modifier = Modifier.align(Alignment.End).height(40.dp).width(100.dp)
                 ) {
-                    Text(text = "Save", color = Color.White, fontSize = 15.sp)
+                    Text(text = stringResource(id = R.string.save_action), color = Color.White, fontSize = 15.sp)
                 }
             }
         }
@@ -530,12 +557,12 @@ fun DialogTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
-        Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp)) // DYNAMIC
+        Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             keyboardOptions = keyboardOptions,
-            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface), // FIXED: Prevents invisible typing in Dark Mode
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface),
             modifier = Modifier.fillMaxWidth(0.6f).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).padding(horizontal = 8.dp, vertical = 6.dp),
             singleLine = true
         )
@@ -572,7 +599,7 @@ fun ItemCard(item: Items, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
                     ) {
-                        Text("Edit", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(text = stringResource(id = R.string.edit_action), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     Button(
@@ -582,20 +609,19 @@ fun ItemCard(item: Items, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
                         shape = RoundedCornerShape(4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
                     ) {
-                        Text("Delete", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(text = stringResource(id = R.string.delete_action), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // FIXED: This creates a subtle dynamic footer that looks great in both Light & Dark modes!
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Row {
                     Text(
-                        text = "Original Price: ",
+                        text = "${stringResource(id = R.string.original_price_label)}: ",
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 12.sp
                     )
