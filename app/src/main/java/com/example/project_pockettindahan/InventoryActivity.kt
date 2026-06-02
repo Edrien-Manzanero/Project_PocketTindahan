@@ -1,30 +1,19 @@
 package com.example.project_pockettindahan
 
+import androidx.compose.ui.text.style.TextAlign
 import AppDatabase
 import Items
 import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -34,43 +23,22 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -79,17 +47,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class InventoryActivity: AppCompatActivity () {
+class InventoryActivity: ComponentActivity() {
 
     private val isDarkModeState = mutableStateOf(false)
-    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
+    private val fontScaleState = mutableStateOf(1.0f)
     private lateinit var prefs: PreferencesManager
 
     private val db by lazy {
         Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java, "pocket-tindahan-db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     override fun onCreate(savedInstanceState: Bundle?){
@@ -97,13 +67,15 @@ class InventoryActivity: AppCompatActivity () {
 
         prefs = PreferencesManager(this)
         isDarkModeState.value = prefs.isDarkMode()
+        fontScaleState.value = prefs.getFontScale()
 
         setContent {
             val context = LocalContext.current
-            val currentLocales = appLocalesState.value
 
-            val localizedContext: android.content.Context = remember(currentLocales) {
-                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+            val isTagalog = java.util.Locale.getDefault().language == "tl"
+
+            val localizedContext: android.content.Context = remember(isTagalog) {
+                val localeTag = if (isTagalog) "tl" else "en"
                 val locale = java.util.Locale(localeTag)
                 java.util.Locale.setDefault(locale)
 
@@ -112,6 +84,9 @@ class InventoryActivity: AppCompatActivity () {
 
                 context.createConfigurationContext(config)
             }
+
+            val currentDensity = LocalDensity.current
+            val customDensity = Density(density = currentDensity.density, fontScale = fontScaleState.value)
 
             val lightColors = lightColorScheme(
                 surface = Color.White,
@@ -124,8 +99,10 @@ class InventoryActivity: AppCompatActivity () {
                 background = Color(0xFF121212)
             )
 
-            // FIXED: Wrapped layout inside CompositionLocalProvider to pass down localized resources smoothly
-            CompositionLocalProvider(LocalContext provides localizedContext) {
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalDensity provides customDensity
+            ) {
                 MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         Message(db)
@@ -139,8 +116,8 @@ class InventoryActivity: AppCompatActivity () {
         super.onResume()
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
+            fontScaleState.value = prefs.getFontScale()
         }
-        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -154,15 +131,13 @@ fun Message(db: AppDatabase) {
                 title = {
                     Surface(
                         shape = CircleShape,
-                        color = Color.White,
+                        color = Color.White, // <--- FIXED: Changed from Transparent to White
                         modifier = Modifier.size(45.dp)
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.img),
                             contentDescription = "Logo",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(5.dp)
+                            modifier = Modifier.fillMaxSize().padding(5.dp)
                         )
                     }
                 },
@@ -171,7 +146,7 @@ fun Message(db: AppDatabase) {
                     containerColor = colorResource(id = R.color.darkBlue)
                 )
             )
-        }
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -195,6 +170,8 @@ fun InventorySearchBar(db: AppDatabase) {
     val categories = listOf("All", "Drinks", "Food", "Cleaning Supplies", "Hygiene", "Miscellaneous")
 
     val itemList by db.ItemsDao().getAll().collectAsState(initial = emptyList())
+    val fontScale = LocalDensity.current.fontScale
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
 
     val filteredItems = itemList.filter { item ->
         val matchesSearch = item.itemName?.contains(searchQuery, ignoreCase = true) ?: false
@@ -221,92 +198,86 @@ fun InventorySearchBar(db: AppDatabase) {
         )
 
         Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = {
-                        // CONNECTED LOCALIZATION STRINGS
-                        Text(text = stringResource(id = R.string.search_products), color = Color.Gray, fontSize = 14.sp)
-                    },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = "Search Icon", tint = Color.Gray, modifier = Modifier.size(20.dp))
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color.Gray,
-                        focusedBorderColor = colorResource(id = R.color.darkBlue),
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+            if (fontScale > 1.0f) {
+                // LARGE FONT: Stack the Search Bar on top, Dropdown and Add underneath
+                Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text(text = stringResource(id = R.string.search_products), color = Color.Gray, fontSize = 14.sp) },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Search Icon", tint = Color.Gray, modifier = Modifier.size(20.dp)) },
+                        // FIXED: Replaced .height(50.dp) with .heightIn(min = 50.dp) to stop text clipping
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Gray, focusedBorderColor = colorResource(id = R.color.darkBlue),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Box {
-                    Box(
-                        modifier = Modifier
-                            .height(50.dp)
-                            .background(Color.Gray, shape = RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.DarkGray, RoundedCornerShape(8.dp))
-                            .clickable { expanded = true }
-                            .padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // CONNECTED LOCALIZATION STRINGS
-                            Text(text = stringResource(id = R.string.category_label), color = Color.White, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.White)
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                    ) {
-                        categories.forEach { category ->
-                            DropdownMenuItem(
-                                text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) },
-                                onClick = {
-                                    selectedCategory = category
-                                    expanded = false
-                                }
-                            )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        CategoryDropdown(
+                            expanded = expanded, selectedCategory = selectedCategory, categories = categories, isTagalog = isTagalog,
+                            onExpand = { expanded = true }, onDismiss = { expanded = false }, onSelect = { selectedCategory = it },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { showAddDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
+                            // FIXED: Replaced .height(50.dp) with .heightIn(min = 50.dp)
+                            modifier = Modifier.weight(1f).heightIn(min = 50.dp)
+                        ) {
+                            Text(text = stringResource(id = R.string.add_btn_label), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center)
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Button(
-                    onClick = { showAddDialog = true },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
-                    modifier = Modifier.height(50.dp)
+            } else {
+                // NORMAL FONT: Keep it side by side
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // CONNECTED LOCALIZATION STRINGS
-                    Text(text = stringResource(id = R.string.add_btn_label), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text(text = stringResource(id = R.string.search_products), color = Color.Gray, fontSize = 14.sp) },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Search Icon", tint = Color.Gray, modifier = Modifier.size(20.dp)) },
+                        // FIXED: Replaced .height(50.dp) with .heightIn(min = 50.dp) to stop text clipping
+                        modifier = Modifier.weight(1f).heightIn(min = 50.dp),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Gray, focusedBorderColor = colorResource(id = R.color.darkBlue),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface, focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface, unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CategoryDropdown(
+                        expanded = expanded, selectedCategory = selectedCategory, categories = categories, isTagalog = isTagalog,
+                        onExpand = { expanded = true }, onDismiss = { expanded = false }, onSelect = { selectedCategory = it },
+                        modifier = Modifier.width(110.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { showAddDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
+                        // FIXED: Replaced .height(50.dp) with .heightIn(min = 50.dp)
+                        modifier = Modifier.heightIn(min = 50.dp)
+                    ) {
+                        Text(text = stringResource(id = R.string.add_btn_label), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
                 }
             }
         }
@@ -320,6 +291,7 @@ fun InventorySearchBar(db: AppDatabase) {
             items(filteredItems) { item ->
                 ItemCard(
                     item = item,
+                    isTagalog = isTagalog,
                     onEditClick = { itemToEdit = item },
                     onDeleteClick = {
                         scope.launch(Dispatchers.IO) {
@@ -334,6 +306,7 @@ fun InventorySearchBar(db: AppDatabase) {
 
     if (showAddDialog) {
         AddItemDialog(
+            isTagalog = isTagalog,
             onDismiss = { showAddDialog = false },
             onAddItem = { newItem ->
                 scope.launch(Dispatchers.IO) {
@@ -350,6 +323,7 @@ fun InventorySearchBar(db: AppDatabase) {
     itemToEdit?.let { editingItem ->
         EditItemDialog(
             item = editingItem,
+            isTagalog = isTagalog,
             onDismiss = { itemToEdit = null },
             onSave = { updatedItem ->
                 scope.launch(Dispatchers.IO) {
@@ -365,7 +339,47 @@ fun InventorySearchBar(db: AppDatabase) {
 }
 
 @Composable
-fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
+fun CategoryDropdown(
+    expanded: Boolean, selectedCategory: String, categories: List<String>, isTagalog: Boolean,
+    onExpand: () -> Unit, onDismiss: () -> Unit, onSelect: (String) -> Unit, modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        Box(
+            // FIXED: Replaced .height(50.dp) with .heightIn(min = 50.dp)
+            modifier = Modifier.heightIn(min = 50.dp).fillMaxWidth().background(Color.Gray, shape = RoundedCornerShape(8.dp)).border(1.dp, Color.DarkGray, RoundedCornerShape(8.dp)).clickable { onExpand() }.padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = stringResource(id = R.string.category_label), color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = Color.White)
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss, modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+            categories.forEach { category ->
+                val displayCat = if (isTagalog) {
+                    when(category) {
+                        "Drinks" -> "Mga Inumin"
+                        "Food" -> "Pagkain"
+                        "Cleaning Supplies" -> "Panlinis"
+                        "Hygiene" -> "Kalinisan"
+                        "Miscellaneous" -> "Iba pa"
+                        "All" -> "Lahat"
+                        else -> category
+                    }
+                } else category
+
+                DropdownMenuItem(
+                    text = { Text(text = displayCat, color = MaterialTheme.colorScheme.onSurface) },
+                    onClick = { onSelect(category); onDismiss() }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AddItemDialog(isTagalog: Boolean, onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
     var productName by remember { mutableStateOf("") }
     var stock by remember { mutableStateOf("") }
     var originalPrice by remember { mutableStateOf("") }
@@ -379,8 +393,8 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(0.dp),
-            border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(4.dp, colorResource(id = R.color.darkBlue)),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
@@ -396,22 +410,38 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
                 DialogTextField(label = stringResource(id = R.string.product_name_label), value = productName, onValueChange = { productName = it })
                 DialogTextField(label = stringResource(id = R.string.stock_pieces_label), value = stock, onValueChange = { stock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
-                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                Column(modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()) {
                     Text(text = stringResource(id = R.string.category_label), color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
                     Box {
                         Box(
-                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray, RoundedCornerShape(4.dp)).clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 6.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                val resolvedCategoryLabel = if (selectedCategory == "Input Category") stringResource(id = R.string.input_category_label) else selectedCategory
-                                Text(text = resolvedCategoryLabel, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                val displayCat = if (isTagalog) {
+                                    when(selectedCategory) {
+                                        "Drinks" -> "Mga Inumin"
+                                        "Food" -> "Pagkain"
+                                        "Cleaning Supplies" -> "Panlinis"
+                                        "Hygiene" -> "Kalinisan"
+                                        "Miscellaneous" -> "Iba pa"
+                                        "Input Category" -> "Ilagay ang Kategorya"
+                                        else -> selectedCategory
+                                    }
+                                } else selectedCategory
+
+                                Text(text = displayCat, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                             categories.forEach { category ->
-                                DropdownMenuItem(text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
+                                val listCat = if (isTagalog) {
+                                    when(category) {
+                                        "Drinks" -> "Mga Inumin"; "Food" -> "Pagkain"; "Cleaning Supplies" -> "Panlinis"; "Hygiene" -> "Kalinisan"; "Miscellaneous" -> "Iba pa"; else -> category
+                                    }
+                                } else category
+                                DropdownMenuItem(text = { Text(text = listCat, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
                             }
                         }
                     }
@@ -422,35 +452,34 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = {
-                        if (productName.isBlank() || stock.isBlank() || originalPrice.isBlank() || retailPrice.isBlank()) {
-                            Toast.makeText(context, "Please fill all required fields", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val stockInt = stock.toIntOrNull()
-                        val origPriceInt = originalPrice.toIntOrNull()
-                        val retailPriceInt = retailPrice.toIntOrNull()
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
+                    Button(
+                        onClick = {
+                            if (productName.isBlank() || stock.isBlank() || originalPrice.isBlank() || retailPrice.isBlank()) {
+                                Toast.makeText(context, "Please fill all required fields", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val stockInt = stock.toIntOrNull()
+                            val origPriceInt = originalPrice.toIntOrNull()
+                            val retailPriceInt = retailPrice.toIntOrNull()
 
-                        if (stockInt == null || origPriceInt == null || retailPriceInt == null) {
-                            Toast.makeText(context, "Please enter valid numbers", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val newItem = Items(
-                            itemName = productName,
-                            itemStock = stockInt,
-                            itemCurrentStock = stockInt,
-                            itemCategory = if (selectedCategory == "Input Category") "" else selectedCategory,
-                            itemOriginalPrice = origPriceInt,
-                            itemRetailPrice = retailPriceInt
-                        )
-                        onAddItem(newItem)
-                    },
-                    shape = RoundedCornerShape(4.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.align(Alignment.End).height(40.dp).width(90.dp)
-                ) {
-                    Text(text = stringResource(id = R.string.add_action), color = Color.White, fontSize = 14.sp)
+                            if (stockInt == null || origPriceInt == null || retailPriceInt == null) {
+                                Toast.makeText(context, "Please enter valid numbers", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val newItem = Items(
+                                itemName = productName, itemStock = stockInt, itemCurrentStock = stockInt,
+                                itemCategory = if (selectedCategory == "Input Category") "" else selectedCategory,
+                                itemOriginalPrice = origPriceInt, itemRetailPrice = retailPriceInt
+                            )
+                            onAddItem(newItem)
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    ) {
+                        Text(text = stringResource(id = R.string.add_action), color = Color.White, fontSize = 14.sp)
+                    }
                 }
             }
         }
@@ -458,7 +487,7 @@ fun AddItemDialog(onDismiss: () -> Unit, onAddItem: (Items) -> Unit) {
 }
 
 @Composable
-fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) {
+fun EditItemDialog(item: Items, isTagalog: Boolean, onDismiss: () -> Unit, onSave: (Items) -> Unit) {
     var productName by remember { mutableStateOf(item.itemName ?: "") }
     var addedStock by remember { mutableStateOf("") }
     var remainingStock by remember { mutableStateOf(item.itemCurrentStock?.toString() ?: "") }
@@ -473,8 +502,8 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(0.dp),
-            border = BorderStroke(8.dp, colorResource(id = R.color.darkBlue)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(4.dp, colorResource(id = R.color.darkBlue)),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
@@ -491,22 +520,31 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
                 DialogTextField(label = stringResource(id = R.string.added_stock_label), value = addedStock, onValueChange = { addedStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 DialogTextField(label = stringResource(id = R.string.remaining_stock_label), value = remainingStock, onValueChange = { remainingStock = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
 
-                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                Column(modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()) {
                     Text(text = stringResource(id = R.string.category_label), color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
                     Box {
                         Box(
-                            modifier = Modifier.fillMaxWidth(0.6f).height(28.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).clickable { expanded = true }.padding(horizontal = 8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray, RoundedCornerShape(4.dp)).clickable { expanded = true }.padding(horizontal = 8.dp, vertical = 6.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                val resolvedCategoryLabel = if (selectedCategory == "Input Category") stringResource(id = R.string.input_category_label) else selectedCategory
-                                Text(text = resolvedCategoryLabel, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                val displayCat = if (isTagalog) {
+                                    when(selectedCategory) {
+                                        "Drinks" -> "Mga Inumin"; "Food" -> "Pagkain"; "Cleaning Supplies" -> "Panlinis"; "Hygiene" -> "Kalinisan"; "Miscellaneous" -> "Iba pa"; "Input Category" -> "Ilagay ang Kategorya"; else -> selectedCategory
+                                    }
+                                } else selectedCategory
+                                Text(text = displayCat, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Dropdown", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(16.dp))
                             }
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
                             categories.forEach { category ->
-                                DropdownMenuItem(text = { Text(text = category, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
+                                val listCat = if (isTagalog) {
+                                    when(category) {
+                                        "Drinks" -> "Mga Inumin"; "Food" -> "Pagkain"; "Cleaning Supplies" -> "Panlinis"; "Hygiene" -> "Kalinisan"; "Miscellaneous" -> "Iba pa"; else -> category
+                                    }
+                                } else category
+                                DropdownMenuItem(text = { Text(text = listCat, color = MaterialTheme.colorScheme.onSurface) }, onClick = { selectedCategory = category; expanded = false })
                             }
                         }
                     }
@@ -517,32 +555,31 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = {
-                        if (productName.isBlank() || remainingStock.isBlank() || originalPrice.isBlank() || retailPrice.isBlank()) {
-                            Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val addedInt = addedStock.toIntOrNull() ?: 0
-                        val remainingInt = remainingStock.toIntOrNull() ?: 0
-                        val origPriceInt = originalPrice.toIntOrNull() ?: 0
-                        val retailPriceInt = retailPrice.toIntOrNull() ?: 0
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Cancel", color = Color.Gray) }
+                    Button(
+                        onClick = {
+                            if (productName.isBlank() || remainingStock.isBlank() || originalPrice.isBlank() || retailPrice.isBlank()) {
+                                Toast.makeText(context, "Please fill required fields", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val addedInt = addedStock.toIntOrNull() ?: 0
+                            val remainingInt = remainingStock.toIntOrNull() ?: 0
+                            val origPriceInt = originalPrice.toIntOrNull() ?: 0
+                            val retailPriceInt = retailPrice.toIntOrNull() ?: 0
 
-                        val updatedItem = item.copy(
-                            itemName = productName,
-                            itemStock = (item.itemStock ?: 0) + addedInt,
-                            itemCurrentStock = remainingInt + addedInt,
-                            itemCategory = if (selectedCategory == "Input Category") "" else selectedCategory,
-                            itemOriginalPrice = origPriceInt,
-                            itemRetailPrice = retailPriceInt
-                        )
-                        onSave(updatedItem)
-                    },
-                    shape = RoundedCornerShape(4.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                    modifier = Modifier.align(Alignment.End).height(40.dp).width(100.dp)
-                ) {
-                    Text(text = stringResource(id = R.string.save_action), color = Color.White, fontSize = 15.sp)
+                            val updatedItem = item.copy(
+                                itemName = productName, itemStock = (item.itemStock ?: 0) + addedInt, itemCurrentStock = remainingInt + addedInt,
+                                itemCategory = if (selectedCategory == "Input Category") "" else selectedCategory,
+                                itemOriginalPrice = origPriceInt, itemRetailPrice = retailPriceInt
+                            )
+                            onSave(updatedItem)
+                        },
+                        shape = RoundedCornerShape(6.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                    ) {
+                        Text(text = stringResource(id = R.string.save_action), color = Color.White, fontSize = 14.sp)
+                    }
                 }
             }
         }
@@ -550,27 +587,30 @@ fun EditItemDialog(item: Items, onDismiss: () -> Unit, onSave: (Items) -> Unit) 
 }
 
 @Composable
-fun DialogTextField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+fun DialogTextField(label: String, value: String, onValueChange: (String) -> Unit, keyboardOptions: KeyboardOptions = KeyboardOptions.Default) {
+    Column(modifier = Modifier.padding(bottom = 8.dp).fillMaxWidth()) {
         Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, modifier = Modifier.padding(bottom = 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             keyboardOptions = keyboardOptions,
-            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface),
-            modifier = Modifier.fillMaxWidth(0.6f).background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray).padding(horizontal = 8.dp, vertical = 6.dp),
+            textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).border(1.dp, Color.Gray, RoundedCornerShape(4.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
             singleLine = true
         )
     }
 }
 
 @Composable
-fun ItemCard(item: Items, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
+fun ItemCard(item: Items, isTagalog: Boolean, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
+    val fontScale = LocalDensity.current.fontScale
+
+    val displayCategory = if (isTagalog) {
+        when(item.itemCategory) {
+            "Drinks" -> "Mga Inumin"; "Food" -> "Pagkain"; "Cleaning Supplies" -> "Panlinis"; "Hygiene" -> "Kalinisan"; "Miscellaneous" -> "Iba pa"; else -> item.itemCategory
+        }
+    } else item.itemCategory
+
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(8.dp),
@@ -578,59 +618,64 @@ fun ItemCard(item: Items, onEditClick: () -> Unit, onDeleteClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column {
-            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = item.itemName ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                    Text(text = item.itemCategory ?: "Uncategorized", color = Color.Gray, fontSize = 12.sp)
+            if (fontScale > 1.0f) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(text = item.itemName ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                    Text(text = displayCategory ?: "Uncategorized", color = Color.Gray, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(4.dp))
                     Row {
-                        Text(text = "Stock: ", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
-                        Text(text = "${item.itemCurrentStock ?: 0}", color = Color(0xFF4CAF50), fontSize = 12.sp)
+                        Text(text = "Stock: ", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp)
+                        Text(text = "${item.itemCurrentStock ?: 0}", color = Color(0xFF4CAF50), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = "₱${item.itemRetailPrice ?: 0}.00", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = onEditClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(6.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
+                        ) { Text(text = stringResource(id = R.string.edit_action), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+
+                        Button(
+                            onClick = onDeleteClick, modifier = Modifier.weight(1f), shape = RoundedCornerShape(6.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                        ) { Text(text = stringResource(id = R.string.delete_action), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White) }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "₱${item.itemRetailPrice ?: 0}.00", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = onEditClick,
-                        modifier = Modifier.height(28.dp).padding(end = 4.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
-                    ) {
-                        Text(text = stringResource(id = R.string.edit_action), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            } else {
+                Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(text = item.itemName ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = displayCategory ?: "Uncategorized", color = Color.Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row {
+                            Text(text = "Stock: ", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                            Text(text = "${item.itemCurrentStock ?: 0}", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "₱${item.itemRetailPrice ?: 0}.00", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                    Button(
-                        onClick = onDeleteClick,
-                        modifier = Modifier.height(28.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
-                    ) {
-                        Text(text = stringResource(id = R.string.delete_action), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Button(
+                            onClick = onEditClick, modifier = Modifier.heightIn(min = 30.dp).padding(end = 4.dp), contentPadding = PaddingValues(horizontal = 8.dp),
+                            shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue))
+                        ) { Text(text = stringResource(id = R.string.edit_action), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White) }
+
+                        Button(
+                            onClick = onDeleteClick, modifier = Modifier.heightIn(min = 30.dp), contentPadding = PaddingValues(horizontal = 8.dp),
+                            shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828))
+                        ) { Text(text = stringResource(id = R.string.delete_action), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White) }
                     }
                 }
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
+
+            Box(modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                 Row {
-                    Text(
-                        text = "${stringResource(id = R.string.original_price_label)}: ",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "₱${item.itemOriginalPrice ?: 0}.00",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Text(text = "${stringResource(id = R.string.original_price_label)}: ", color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                    Text(text = "₱${item.itemOriginalPrice ?: 0}.00", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }

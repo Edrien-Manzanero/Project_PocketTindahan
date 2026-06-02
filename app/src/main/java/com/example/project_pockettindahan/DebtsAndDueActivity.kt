@@ -26,10 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -41,10 +45,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// FIXED: Extended AppCompatActivity for seamless system runtime localization
 class DebtsAndDueActivity : AppCompatActivity() {
 
     private val isDarkModeState = mutableStateOf(false)
+    private val fontScaleState = mutableStateOf(1.0f)
     private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
@@ -62,6 +66,7 @@ class DebtsAndDueActivity : AppCompatActivity() {
 
         prefs = PreferencesManager(this)
         isDarkModeState.value = prefs.isDarkMode()
+        fontScaleState.value = prefs.getFontScale()
 
         setContent {
             val context = LocalContext.current
@@ -78,6 +83,9 @@ class DebtsAndDueActivity : AppCompatActivity() {
                 context.createConfigurationContext(config)
             }
 
+            val currentDensity = LocalDensity.current
+            val customDensity = Density(density = currentDensity.density, fontScale = fontScaleState.value)
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -89,8 +97,10 @@ class DebtsAndDueActivity : AppCompatActivity() {
                 background = Color(0xFF121212)
             )
 
-            // FIXED: Enclosed the screen elements inside the localized configuration container provider
-            CompositionLocalProvider(LocalContext provides localizedContext) {
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalDensity provides customDensity
+            ) {
                 MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         DebtsScreen(db)
@@ -104,6 +114,7 @@ class DebtsAndDueActivity : AppCompatActivity() {
         super.onResume()
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
+            fontScaleState.value = prefs.getFontScale()
         }
         appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
@@ -186,7 +197,6 @@ fun DebtsScreen(db: AppDatabase) {
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                // FIXED: Map categories to key-resource pairs so internal sorting strings remain safe
                 val tabs = listOf(
                     "Unpaid" to R.string.tab_unpaid,
                     "Paid" to R.string.tab_paid,
@@ -200,17 +210,30 @@ fun DebtsScreen(db: AppDatabase) {
                         else -> RoundedCornerShape(0.dp)
                     }
                     Box(
-                        modifier = Modifier.weight(1f).background(if (isSelected) colorResource(id = R.color.darkBlue) else MaterialTheme.colorScheme.surface, shape).border(1.dp, if (isSelected) colorResource(id = R.color.darkBlue) else Color.Gray, shape).clickable { selectedTab = tabKey }.padding(vertical = 8.dp),
+                        modifier = Modifier.weight(1f).background(if (isSelected) colorResource(id = R.color.darkBlue) else MaterialTheme.colorScheme.surface, shape).border(1.dp, if (isSelected) colorResource(id = R.color.darkBlue) else Color.Gray, shape).clickable { selectedTab = tabKey }.padding(vertical = 8.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = stringResource(id = tabResId), color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(
+                            text = stringResource(id = tabResId),
+                            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            lineHeight = 14.sp,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 88.dp)
+            ) {
                 items(filteredDebts) { debt ->
                     DebtCard(
                         debt = debt,
@@ -244,33 +267,130 @@ fun DebtsScreen(db: AppDatabase) {
 
 @Composable
 fun DebtCard(debt: Debt, onMarkPaid: () -> Unit, onEditClick: () -> Unit, onDelete: () -> Unit) {
+    // 1. Read the exact font scale the user has selected!
+    val fontScale = LocalDensity.current.fontScale
+
     Card(
         modifier = Modifier.fillMaxWidth().shadow(4.dp, RoundedCornerShape(8.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = debt.debtName ?: stringResource(id = R.string.unknown_label), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                Row {
-                    Text(text = stringResource(id = R.string.amount_label), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "₱ ${debt.debtAmount}.00", fontSize = 12.sp, color = Color(0xFFC62828), fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            // TOP SECTION: Customer Details (Same as before)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = debt.debtName ?: stringResource(id = R.string.unknown_label),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(id = R.string.due_label, debt.debtDate ?: ""),
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
                 }
-                Text(text = stringResource(id = R.string.due_label, debt.debtDate ?: ""), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = stringResource(id = R.string.amount_label),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "₱ ${debt.debtAmount}.00",
+                        fontSize = 16.sp,
+                        color = Color(0xFFC62828),
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (debt.debtStatus != "Paid") ActionButton(stringResource(id = R.string.mark_paid_action), Color(0xFF2E7D32), onMarkPaid)
-                ActionButton(stringResource(id = R.string.edit_action), colorResource(id = R.color.darkBlue), onEditClick)
-                ActionButton(stringResource(id = R.string.delete_action), Color(0xFFC62828), onDelete)
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = Color.LightGray, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // BOTTOM SECTION: The Smart Layout Switcher
+            if (fontScale > 1.0f) {
+                // IF FONT IS LARGE/EXTRA LARGE: Use the stacked layout to prevent crushing
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (debt.debtStatus != "Paid") {
+                        ActionButton(
+                            text = stringResource(id = R.string.mark_paid_action),
+                            color = Color(0xFF2E7D32),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            onClick = onMarkPaid
+                        )
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ActionButton(
+                            text = stringResource(id = R.string.edit_action),
+                            color = colorResource(id = R.color.darkBlue),
+                            modifier = Modifier.weight(1f),
+                            onClick = onEditClick
+                        )
+                        ActionButton(
+                            text = stringResource(id = R.string.delete_action),
+                            color = Color(0xFFC62828),
+                            modifier = Modifier.weight(1f),
+                            onClick = onDelete
+                        )
+                    }
+                }
+            } else {
+                // IF FONT IS NORMAL: Keep them neatly side-by-side!
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (debt.debtStatus != "Paid") {
+                        ActionButton(
+                            text = stringResource(id = R.string.mark_paid_action),
+                            color = Color(0xFF2E7D32),
+                            onClick = onMarkPaid
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    ActionButton(
+                        text = stringResource(id = R.string.edit_action),
+                        color = colorResource(id = R.color.darkBlue),
+                        onClick = onEditClick
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ActionButton(
+                        text = stringResource(id = R.string.delete_action),
+                        color = Color(0xFFC62828),
+                        onClick = onDelete
+                    )
+                }
             }
         }
     }
 }
 
+// Adjusted padding to look good in both normal and stacked layouts
 @Composable
-fun ActionButton(text: String, color: Color, onClick: () -> Unit) {
-    Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = color), contentPadding = PaddingValues(horizontal = 8.dp), shape = RoundedCornerShape(4.dp), modifier = Modifier.height(30.dp)) {
-        Text(text = text, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+fun ActionButton(text: String, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = color),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        shape = RoundedCornerShape(6.dp),
+        modifier = modifier.heightIn(min = 36.dp)
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

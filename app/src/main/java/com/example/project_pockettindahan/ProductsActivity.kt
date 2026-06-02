@@ -4,11 +4,12 @@ import AppDatabase
 import Items
 import Sales
 import SalesItem
-
+import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -40,10 +42,12 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -57,28 +61,48 @@ import java.util.Locale
 
 data class CartItem(val product: Items, val quantity: Int)
 
+// FIXED 1: Reverted to ComponentActivity to stop the Theme Crash
 class ProductsActivity : ComponentActivity() {
 
-    // 1. Setup Theme Variables
     private val isDarkModeState = mutableStateOf(false)
+    private val fontScaleState = mutableStateOf(1.0f)
+    private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
     private lateinit var prefs: PreferencesManager
 
     private val db by lazy {
         Room.databaseBuilder(
             applicationContext,
             AppDatabase::class.java, "pocket-tindahan-db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 2. Initialize Preferences
         prefs = PreferencesManager(this)
         isDarkModeState.value = prefs.isDarkMode()
+        fontScaleState.value = prefs.getFontScale()
 
         setContent {
-            // 3. Define Palettes
+            val context = LocalContext.current
+            val currentLocales = appLocalesState.value
+
+            val localizedContext: android.content.Context = remember(currentLocales) {
+                val localeTag = if (currentLocales.toLanguageTags().contains("tl")) "tl" else "en"
+                val locale = java.util.Locale(localeTag)
+                java.util.Locale.setDefault(locale)
+
+                val config = Configuration(context.resources.configuration)
+                config.setLocale(locale)
+
+                context.createConfigurationContext(config)
+            }
+
+            val currentDensity = LocalDensity.current
+            val customDensity = Density(density = currentDensity.density, fontScale = fontScaleState.value)
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -90,21 +114,26 @@ class ProductsActivity : ComponentActivity() {
                 background = Color(0xFF121212)
             )
 
-            // 4. Wrap Screen in MaterialTheme
-            MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    ProductsScreen(db)
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalDensity provides customDensity
+            ) {
+                MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        ProductsScreen(db)
+                    }
                 }
             }
         }
     }
 
-    // 5. Instantly Refresh Theme
     override fun onResume() {
         super.onResume()
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
+            fontScaleState.value = prefs.getFontScale()
         }
+        appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
 
@@ -121,12 +150,19 @@ fun ProductsScreen(db: AppDatabase) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
+    // FIXED 2: A crash-proof way to check if Tagalog is active
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
+
     Scaffold(
-        containerColor = Color.Transparent, // Adapts to theme surface
+        containerColor = Color.Transparent,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(45.dp)) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White, // <--- FIXED: Changed from Transparent to White
+                        modifier = Modifier.size(45.dp)
+                    ) {
                         Image(
                             painter = painterResource(id = R.drawable.img),
                             contentDescription = "Logo",
@@ -149,21 +185,26 @@ fun ProductsScreen(db: AppDatabase) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                            .padding(horizontal = 16.dp, vertical = 16.dp), // slightly reduced horizontal padding
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        // FIXED: Added weight(1f) so this side takes leftover space but STOPS at the button
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
-                                text = "Total Cart: ₱${totalCartPrice}.00",
+                                text = if (isTagalog) "Kabuuang Cart: ₱${totalCartPrice}.00" else "Total Cart: ₱${totalCartPrice}.00",
                                 color = Color.White,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 22.sp
+                                fontSize = 20.sp, // Dropped slightly from 22 to 20 for safety
+                                maxLines = 1, // Stops it from stacking awkwardly
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "Items in Cart: $totalCartQuantity",
+                                text = if (isTagalog) "Mga Item: $totalCartQuantity" else "Items in Cart: $totalCartQuantity",
                                 color = Color.LightGray,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
 
@@ -171,16 +212,22 @@ fun ProductsScreen(db: AppDatabase) {
                             onClick = { showCartDialog = true },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(48.dp)
+                            // FIXED: Changed height to heightIn so it can flex if the text needs it
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
                             Icon(
-                                painter = painterResource(android.R.drawable.ic_menu_agenda), // Replace if missing
+                                painter = painterResource(android.R.drawable.ic_menu_agenda),
                                 contentDescription = "Cart",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("View Cart", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isTagalog) "Tingnan" else "View Cart",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1 // Forces the button text to stay on one line
+                            )
                         }
                     }
                 }
@@ -191,7 +238,7 @@ fun ProductsScreen(db: AppDatabase) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background) // DYNAMIC
+                .background(MaterialTheme.colorScheme.background)
                 .padding(15.dp)
                 .border(4.dp, colorResource(id = R.color.darkBlue), RoundedCornerShape(16.dp)),
             verticalArrangement = Arrangement.Top,
@@ -217,7 +264,7 @@ fun ProductsScreen(db: AppDatabase) {
                             }
                         }
                         cartItems = newCart
-                        selectedCategory = null // Return to menu
+                        selectedCategory = null
                     }
                 )
             }
@@ -276,7 +323,11 @@ fun ProductsScreen(db: AppDatabase) {
                     withContext(Dispatchers.Main) {
                         cartItems = emptyList()
                         showCartDialog = false
-                        Toast.makeText(context, "Checkout Successful!", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            context,
+                            if (isTagalog) "Matagumpay ang Checkout!" else "Checkout Successful!",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
@@ -320,9 +371,24 @@ fun CategoryGrid(onCategoryClick: (String) -> Unit) {
 
 @Composable
 fun CategoryButton(title: String, iconRes: Int, onClick: () -> Unit) {
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
+    val displayTitle = if (isTagalog) {
+        when (title) {
+            "Drinks" -> "Mga Inumin"
+            "Food" -> "Pagkain"
+            "Cleaning Supplies" -> "Panlinis"
+            "Hygiene" -> "Kalinisan"
+            "Miscellaneous" -> "Iba pa"
+            else -> title
+        }
+    } else {
+        title
+    }
+
     Box(
         modifier = Modifier
-            .size(150.dp)
+            .fillMaxWidth()
+            .aspectRatio(1f)
             .drawBehind {
                 val shadowColor = Color.Black.copy(alpha = 0.5f)
                 val spread = 8.dp.toPx()
@@ -344,19 +410,24 @@ fun CategoryButton(title: String, iconRes: Int, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Box(
-            // DYNAMIC: Surface instead of White
             modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)).padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Image(
                     painter = painterResource(id = iconRes),
-                    contentDescription = title,
-                    modifier = Modifier.size(70.dp).padding(bottom = 8.dp),
+                    contentDescription = displayTitle,
+                    modifier = Modifier.weight(1f).padding(bottom = 8.dp),
                     contentScale = ContentScale.Fit
                 )
-                // DYNAMIC: Text adapts to mode
-                Text(text = title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, fontSize = 18.sp)
+                Text(
+                    text = displayTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    fontSize = 16.sp,
+                    lineHeight = 18.sp
+                )
             }
         }
     }
@@ -375,19 +446,36 @@ fun ProductListScreen(
     val itemQuantities = remember { mutableStateMapOf<Int, Int>() }
     val context = LocalContext.current
 
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
+    val displayCategory = if (isTagalog) {
+        when (category) {
+            "Drinks" -> "Mga Inumin"
+            "Food" -> "Pagkain"
+            "Cleaning Supplies" -> "Panlinis"
+            "Hygiene" -> "Kalinisan"
+            "Miscellaneous" -> "Iba pa"
+            else -> category
+        }
+    } else category
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            text = category,
+            text = displayCategory,
             fontSize = 24.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             textAlign = TextAlign.Center
         )
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (categoryItems.isEmpty()) {
-                item { Text(text = "No items found.", color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }
+                item {
+                    Text(
+                        text = if (isTagalog) "Walang nahanap na item." else "No items found.",
+                        color = Color.Gray, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+                    )
+                }
             } else {
                 items(categoryItems) { item ->
                     ProductCard(
@@ -409,7 +497,7 @@ fun ProductListScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "Back", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(text = if (isTagalog) "Bumalik" else "Back", color = Color.White, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -421,17 +509,16 @@ fun ProductListScreen(
 
                     if (itemsToAdd.isNotEmpty()) {
                         onAddToCart(itemsToAdd)
-                        Toast.makeText(context, "Added to cart!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, if (isTagalog) "Naidagdag sa cart!" else "Added to cart!", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "No items selected", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, if (isTagalog) "Walang napiling item" else "No items selected", Toast.LENGTH_SHORT).show()
                     }
                 },
-                // DYNAMIC: Surface background, Text onSurface color
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, colorResource(id = R.color.darkBlue)),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(text = "Add", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                Text(text = if (isTagalog) "Idagdag" else "Add", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -439,22 +526,36 @@ fun ProductListScreen(
 
 @Composable
 fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface) // DYNAMIC
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = item.itemName ?: "Unknown Item", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp) // DYNAMIC
-                    Text(text = item.itemCategory ?: "Uncategorized", color = Color.Gray, fontSize = 14.sp)
+                    Text(text = item.itemName ?: "Unknown Item", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+
+                    val translatedCat = if (isTagalog) {
+                        when (item.itemCategory) {
+                            "Drinks" -> "Mga Inumin"
+                            "Food" -> "Pagkain"
+                            "Cleaning Supplies" -> "Panlinis"
+                            "Hygiene" -> "Kalinisan"
+                            "Miscellaneous" -> "Iba pa"
+                            else -> item.itemCategory
+                        }
+                    } else item.itemCategory
+
+                    Text(text = translatedCat ?: "Uncategorized", color = Color.Gray, fontSize = 14.sp)
                 }
 
                 Text(
                     text = "₱${item.itemRetailPrice ?: 0}.00",
-                    color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 16.sp
                 )
@@ -464,7 +565,7 @@ fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "Stock: ", color = Color.Gray, fontSize = 14.sp)
+                    Text(text = if (isTagalog) "Stock: " else "Stock: ", color = Color.Gray, fontSize = 14.sp)
                     Text(text = "${item.itemCurrentStock ?: 0}", color = Color(0xFF4CAF50), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
 
@@ -473,15 +574,15 @@ fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
                     modifier = Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "-", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                        text = "-", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.clickable { if (quantity > 0) onQuantityChange(quantity - 1) }.padding(horizontal = 8.dp)
                     )
                     Text(
-                        text = quantity.toString(), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                        text = quantity.toString(), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
                     Text(
-                        text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, // DYNAMIC
+                        text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.clickable { if (quantity < (item.itemCurrentStock ?: 0)) onQuantityChange(quantity + 1) }.padding(horizontal = 8.dp)
                     )
                 }
@@ -492,24 +593,29 @@ fun ProductCard(item: Items, quantity: Int, onQuantityChange: (Int) -> Unit) {
 
 @Composable
 fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () -> Unit) {
+    val isTagalog = java.util.Locale.getDefault().language == "tl"
+
     Dialog(onDismissRequest = onDismiss) {
         Card(
             shape = RoundedCornerShape(12.dp),
             border = BorderStroke(4.dp, colorResource(id = R.color.darkBlue)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background), // DYNAMIC
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
             modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(text = "Your Cart", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), textAlign = TextAlign.Center) // DYNAMIC
+                Text(
+                    text = if (isTagalog) "Iyong Cart" else "Your Cart",
+                    fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), textAlign = TextAlign.Center
+                )
 
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (cartItems.isEmpty()) {
-                        item { Text(text = "Your cart is currently empty.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center) }
+                        item { Text(text = if (isTagalog) "Wala pang laman ang iyong cart." else "Your cart is currently empty.", color = Color.Gray, modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center) }
                     } else {
                         items(cartItems) { cartItem ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), // DYNAMIC
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(2.dp)
                             ) {
                                 Row(
@@ -518,13 +624,13 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = cartItem.product.itemName ?: "Unknown", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) // DYNAMIC
-                                        Text(text = "Qty: ${cartItem.quantity}", color = Color.Gray, fontSize = 14.sp)
+                                        Text(text = cartItem.product.itemName ?: "Unknown", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        Text(text = if (isTagalog) "Dami: ${cartItem.quantity}" else "Qty: ${cartItem.quantity}", color = Color.Gray, fontSize = 14.sp)
                                     }
                                     Text(
                                         text = "₱${(cartItem.product.itemRetailPrice ?: 0) * cartItem.quantity}.00",
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = MaterialTheme.colorScheme.onSurface // DYNAMIC
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
@@ -539,7 +645,7 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total:", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) // DYNAMIC
+                    Text(if (isTagalog) "Kabuuan:" else "Total:", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text("₱${total}.00", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF4CAF50))
                 }
 
@@ -547,12 +653,12 @@ fun CartDialog(cartItems: List<CartItem>, onDismiss: () -> Unit, onCheckout: () 
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.darkBlue)), shape = RoundedCornerShape(8.dp)) {
-                        Text(text = "Back", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text(text = if (isTagalog) "Bumalik" else "Back", color = Color.White, fontWeight = FontWeight.Bold)
                     }
 
                     if (cartItems.isNotEmpty()) {
                         Button(onClick = onCheckout, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)), shape = RoundedCornerShape(8.dp)) {
-                            Text(text = "Checkout", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(text = if (isTagalog) "I-checkout" else "Checkout", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

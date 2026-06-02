@@ -22,10 +22,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
@@ -39,7 +41,6 @@ class SettingsActivity : AppCompatActivity() {
     }
 }
 
-// --- HELPER TO SAVE SETTINGS ---
 class PreferencesManager(context: Context) {
     private val prefs = context.getSharedPreferences("PocketTindahanSettings", Context.MODE_PRIVATE)
 
@@ -50,6 +51,14 @@ class PreferencesManager(context: Context) {
     fun isDarkMode(): Boolean {
         return prefs.getBoolean("DARK_MODE", false)
     }
+
+    fun saveFontScale(scale: Float) {
+        prefs.edit().putFloat("FONT_SCALE", scale).apply()
+    }
+
+    fun getFontScale(): Float {
+        return prefs.getFloat("FONT_SCALE", 1.0f)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,11 +67,11 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val prefsManager = remember { PreferencesManager(context) }
 
-    // Load the saved dark mode state
     var isDarkMode by remember { mutableStateOf(prefsManager.isDarkMode()) }
+    var fontScale by remember { mutableStateOf(prefsManager.getFontScale()) }
 
-    // Language state variables
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showFontDialog by remember { mutableStateOf(false) }
 
     val localeList = AppCompatDelegate.getApplicationLocales()
 
@@ -70,7 +79,6 @@ fun SettingsScreen() {
         mutableStateOf(if (localeList.toLanguageTags().contains("tl")) "Tagalog" else "English")
     }
 
-    // FIXED: We now use the full path 'java.util.Locale' to bypass the auto-import bug
     val localizedContext = remember(localeList) {
         val localeTag = if (localeList.toLanguageTags().contains("tl")) "tl" else "en"
         val locale = java.util.Locale(localeTag)
@@ -81,16 +89,22 @@ fun SettingsScreen() {
         context.createConfigurationContext(config)
     }
 
+    val currentDensity = LocalDensity.current
+    val customDensity = Density(density = currentDensity.density, fontScale = fontScale)
+
     val lightColors = lightColorScheme(surface = Color.White, onSurface = Color.Black, background = Color(0xFFF5F5F5))
     val darkColors = darkColorScheme(surface = Color(0xFF1E1E1E), onSurface = Color.White, background = Color(0xFF121212))
 
-    CompositionLocalProvider(LocalContext provides localizedContext) {
+    CompositionLocalProvider(
+        LocalContext provides localizedContext,
+        LocalDensity provides customDensity
+    ) {
         MaterialTheme(colorScheme = if (isDarkMode) darkColors else lightColors) {
             Scaffold(
                 topBar = {
                     CenterAlignedTopAppBar(
                         title = {
-                            Surface(shape = CircleShape, color = Color.White, modifier = Modifier.size(45.dp)) {
+                            Surface(shape = CircleShape, color = Color.Transparent, modifier = Modifier.size(45.dp)) {
                                 Image(painter = painterResource(id = R.drawable.img), contentDescription = "Logo", modifier = Modifier.fillMaxSize().padding(5.dp))
                             }
                         },
@@ -107,7 +121,6 @@ fun SettingsScreen() {
                             shape = RoundedCornerShape(0.dp)
                         ) {
                             Column {
-                                // --- LANGUAGE ROW ---
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -126,7 +139,32 @@ fun SettingsScreen() {
 
                                 HorizontalDivider(color = Color.LightGray, thickness = 2.dp)
 
-                                // --- DARK MODE ROW ---
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showFontDialog = true }
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Spacer(modifier = Modifier.width(40.dp))
+                                        Text(text = "Text Size", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    Text(
+                                        text = when(fontScale) {
+                                            1.0f -> "Default"
+                                            1.2f -> "Large"
+                                            1.5f -> "Extra Large"
+                                            else -> "Default"
+                                        },
+                                        fontSize = 14.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                HorizontalDivider(color = Color.LightGray, thickness = 2.dp)
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -152,39 +190,76 @@ fun SettingsScreen() {
                         }
                     }
                 }
-            }
 
-            // --- LANGUAGE SELECTION POPUP DIALOG ---
-            if (showLanguageDialog) {
-                AlertDialog(
-                    onDismissRequest = { showLanguageDialog = false },
-                    title = { Text(text = stringResource(id = R.string.dialog_select_language), color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.Bold) },
-                    text = {
-                        Column {
-                            // English Selection Option
-                            Row(modifier = Modifier.fillMaxWidth().clickable {
-                                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
-                                showLanguageDialog = false
-                            }.padding(vertical = 12.dp)) {
-                                Text(text = "•  ${stringResource(id = R.string.lang_english)}", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                            }
+                if (showLanguageDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showLanguageDialog = false },
+                        title = { Text(text = stringResource(id = R.string.dialog_select_language), color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Row(modifier = Modifier.fillMaxWidth().clickable {
+                                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+                                    showLanguageDialog = false
+                                }.padding(vertical = 12.dp)) {
+                                    Text(text = "•  ${stringResource(id = R.string.lang_english)}", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
 
-                            // Tagalog Selection Option
-                            Row(modifier = Modifier.fillMaxWidth().clickable {
-                                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("tl"))
-                                showLanguageDialog = false
-                            }.padding(vertical = 12.dp)) {
-                                Text(text = "•  ${stringResource(id = R.string.lang_tagalog)}", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Row(modifier = Modifier.fillMaxWidth().clickable {
+                                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("tl"))
+                                    showLanguageDialog = false
+                                }.padding(vertical = 12.dp)) {
+                                    Text(text = "•  ${stringResource(id = R.string.lang_tagalog)}", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
                             }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showLanguageDialog = false }) {
-                            Text(text = stringResource(id = R.string.btn_cancel), color = Color.Gray)
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showLanguageDialog = false }) {
+                                Text(text = stringResource(id = R.string.btn_cancel), color = Color.Gray)
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                }
+
+                if (showFontDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showFontDialog = false },
+                        title = { Text(text = "Select Text Size", color = colorResource(id = R.color.darkBlue), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Row(modifier = Modifier.fillMaxWidth().clickable {
+                                    fontScale = 1.0f
+                                    prefsManager.saveFontScale(1.0f)
+                                    showFontDialog = false
+                                }.padding(vertical = 12.dp)) {
+                                    Text(text = "•  Default", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth().clickable {
+                                    fontScale = 1.2f
+                                    prefsManager.saveFontScale(1.2f)
+                                    showFontDialog = false
+                                }.padding(vertical = 12.dp)) {
+                                    Text(text = "•  Large", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
+
+                                Row(modifier = Modifier.fillMaxWidth().clickable {
+                                    fontScale = 1.5f
+                                    prefsManager.saveFontScale(1.5f)
+                                    showFontDialog = false
+                                }.padding(vertical = 12.dp)) {
+                                    Text(text = "•  Extra Large", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showFontDialog = false }) {
+                                Text(text = stringResource(id = R.string.btn_cancel), color = Color.Gray)
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                }
             }
         }
     }

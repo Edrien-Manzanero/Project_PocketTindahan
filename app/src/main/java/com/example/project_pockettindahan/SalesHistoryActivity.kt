@@ -32,11 +32,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -46,13 +48,16 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 
-// FIXED: Extended AppCompatActivity for seamless localization state management
 class SalesHistoryActivity : AppCompatActivity() {
 
     private val isDarkModeState = mutableStateOf(false)
-    // FIXED: Track application locale states safely
     private val appLocalesState = mutableStateOf(AppCompatDelegate.getApplicationLocales())
+    // FIXED: Added state to track the font scale
+    private val fontScaleState = mutableStateOf(1.0f)
     private lateinit var prefs: PreferencesManager
 
     private val db by lazy {
@@ -69,6 +74,7 @@ class SalesHistoryActivity : AppCompatActivity() {
 
         prefs = PreferencesManager(this)
         isDarkModeState.value = prefs.isDarkMode()
+        fontScaleState.value = prefs.getFontScale() // Read saved font scale
 
         setContent {
             val context = LocalContext.current
@@ -85,6 +91,10 @@ class SalesHistoryActivity : AppCompatActivity() {
                 context.createConfigurationContext(config)
             }
 
+            // FIXED: Grab current density and apply the font scale multiplier
+            val currentDensity = LocalDensity.current
+            val customDensity = Density(density = currentDensity.density, fontScale = fontScaleState.value)
+
             val lightColors = lightColorScheme(
                 surface = Color.White,
                 onSurface = colorResource(id = R.color.darkBlue),
@@ -96,8 +106,11 @@ class SalesHistoryActivity : AppCompatActivity() {
                 background = Color(0xFF121212)
             )
 
-            // FIXED: Wrapped interface in CompositionLocalProvider to intercept language changes downstream
-            CompositionLocalProvider(LocalContext provides localizedContext) {
+            // FIXED: Provided both LocalContext (for language) and LocalDensity (for font size)
+            CompositionLocalProvider(
+                LocalContext provides localizedContext,
+                LocalDensity provides customDensity
+            ) {
                 MaterialTheme(colorScheme = if (isDarkModeState.value) darkColors else lightColors) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         SalesScreen(db)
@@ -111,8 +124,8 @@ class SalesHistoryActivity : AppCompatActivity() {
         super.onResume()
         if (::prefs.isInitialized) {
             isDarkModeState.value = prefs.isDarkMode()
+            fontScaleState.value = prefs.getFontScale() // FIXED: Instantly refresh font scale on return
         }
-        // FIXED: Refresh context locale bindings dynamically on focus resume
         appLocalesState.value = AppCompatDelegate.getApplicationLocales()
     }
 }
@@ -124,7 +137,6 @@ fun SalesScreen(db: AppDatabase) {
     val salesList by db.SalesDao().getAll().collectAsState(initial = emptyList())
 
     var selectedTab by remember { mutableStateOf("Daily") }
-    // FIXED: Mapped tab metrics to localization resources pairs
     val tabs = listOf(
         "Daily" to R.string.tab_daily,
         "Weekly" to R.string.tab_weekly,
@@ -246,7 +258,7 @@ fun SalesScreen(db: AppDatabase) {
                             text = stringResource(id = tabResId),
                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp // Snapped slightly smaller to keep Tagalog words from clipping
+                            fontSize = 11.sp
                         )
                     }
                 }
@@ -292,14 +304,17 @@ fun SalesScreen(db: AppDatabase) {
 @Composable
 fun SummaryRow(label: String, value: String) {
     Row(
-        modifier = Modifier.padding(bottom = 4.dp),
+        // FIXED: Added fillMaxWidth so it stretches to the edges
+        modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = 14.sp,
-            modifier = Modifier.width(135.dp)
+            // FIXED: Removed the hardcoded 135.dp width and replaced it with weight.
+            // This prevents "Transactions:" from breaking into two lines!
+            modifier = Modifier.weight(1f)
         )
         Text(
             text = value,
@@ -318,6 +333,10 @@ fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // NEW: Adds the Double Tap gesture to the entire row!
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = { onViewClick() })
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -326,7 +345,12 @@ fun TransactionRow(sale: Sales, onViewClick: () -> Unit) {
             text = "${sale.salesTime ?: fallbackTime} | Sale #$formattedId",
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.ExtraBold,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            // FIXED: Adding weight(1f) stops this text from pushing the button off-screen.
+            // It will now truncate with an ellipsis (...) if it gets too long.
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
